@@ -4,118 +4,151 @@
   <meta charset="UTF-8" />
   <title>SimpleChat 登入 / 註冊</title>
   <style>
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-html, body {
-  width: 100%;
-  height: 100%;
-}
-
-
-body {
-  display: flex;
-  justify-content: center; /* 水平置中 */
-  align-items: center;     /* 垂直置中 */
-  background: #2c2f33;
-  font-family: "微軟正黑體", sans-serif;
-  color: white;
-}
-
-
-.container {
-  background: #23272a;
-  width: 320px;
-  padding: 24px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-
-
-.container h2 {
-  text-align: center;
-  margin-bottom: 16px;
-  font-size: 20px;
-}
-
-
-.container input {
-  height: 40px;
-  margin-bottom: 12px;
-  padding: 0 12px;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-}
-.container button {
-  height: 42px;
-  margin-top: 8px;
-  background-color: #7289da;
-  border: none;
-  border-radius: 4px;
-  font-size: 16px;
-  cursor: pointer;
-}
-.container .toggle {
-  margin-top: 12px;
-  text-align: center;
-  font-size: 14px;
-  color: #99aab5;
-  cursor: pointer;
-}
-#errorMsg {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #f33;
-  text-align: center;
-}
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #2c2f33;
+      font-family: "微軟正黑體", sans-serif;
+      color: white;
+    }
+    .container {
+      background: #23272a;
+      width: 340px;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+    }
+    .container h2 {
+      text-align: center;
+      margin-bottom: 16px;
+      font-size: 20px;
+    }
+    .container input[type="email"],
+    .container input[type="password"],
+    .container input[type="text"],
+    .container input[type="file"] {
+      height: 40px;
+      margin-bottom: 6px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      background-color: #fff;
+      color: #000;
+    }
+    .container button {
+      height: 42px;
+      margin-top: 12px;
+      background-color: #7289da;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      color: white;
+    }
+    .container .toggle {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 14px;
+      color: #99aab5;
+      cursor: pointer;
+    }
+    .input-group {
+      position: relative;
+    }
+    .show-password {
+      position: absolute;
+      top: 50%;
+      right: 12px;
+      transform: translateY(-50%);
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+    }
+    .error {
+      font-size: 12px;
+      color: #f66;
+      margin: 0 0 10px 4px;
+    }
+    .file-label {
+      font-size: 13px;
+      color: #ccc;
+      margin: 6px 0 2px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h2 id="formTitle">登入 SimpleChat</h2>
     <input type="email" id="email" placeholder="電子郵件" />
-    <input type="password" id="password" placeholder="密碼" />
-    <input type="text" id="nickname" placeholder="暱稱 (註冊時填寫)" style="display:none"/>
+    <div class="error" id="emailError"></div>
+
+    <div class="input-group">
+      <input type="password" id="password" placeholder="密碼" />
+      <span class="show-password" id="togglePwd">👁️</span>
+    </div>
+    <div class="error" id="passwordError"></div>
+
+    <input type="text" id="nickname" placeholder="名稱 (註冊時填寫)" style="display:none"/>
+    <div class="error" id="nicknameError"></div>
+
+    <div id="avatarContainer" style="display:none;">
+      <label class="file-label">選擇頭像：</label>
+      <input type="file" id="avatarInput" accept="image/*" />
+    </div>
+    
     <button id="submitBtn">登入</button>
     <div class="toggle" id="toggleForm">沒有帳號？點此註冊</div>
-    <div id="errorMsg" style="color:#f33; margin-top:10px;"></div>
+    <div id="errorMsg" class="error" style="text-align:center;"></div>
   </div>
 
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
-
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-storage-compat.js"></script>
   <script>
-    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
       authDomain: "simple-chat-41e8d.firebaseapp.com",
       databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
       projectId: "simple-chat-41e8d",
-      storageBucket: "simple-chat-41e8d.firebasestorage.app",
+      storageBucket: "simple-chat-41e8d.appspot.com",
       messagingSenderId: "181779135449",
       appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
     };
-
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
+    const storage = firebase.storage();
 
     const emailInput = document.getElementById("email");
     const passwordInput = document.getElementById("password");
     const nicknameInput = document.getElementById("nickname");
+    const avatarInput = document.getElementById("avatarInput");
+    const avatarContainer = document.getElementById("avatarContainer");
+
     const submitBtn = document.getElementById("submitBtn");
     const toggleForm = document.getElementById("toggleForm");
     const formTitle = document.getElementById("formTitle");
     const errorMsg = document.getElementById("errorMsg");
+
+    const emailError = document.getElementById("emailError");
+    const passwordError = document.getElementById("passwordError");
+    const nicknameError = document.getElementById("nicknameError");
+
+    const togglePwd = document.getElementById("togglePwd");
 
     let isLogin = true;
 
@@ -125,62 +158,77 @@ body {
         formTitle.textContent = "登入 SimpleChat";
         submitBtn.textContent = "登入";
         nicknameInput.style.display = "none";
+        avatarContainer.style.display = "none";
         toggleForm.textContent = "沒有帳號？點此註冊";
       } else {
         formTitle.textContent = "註冊 SimpleChat";
         submitBtn.textContent = "註冊";
         nicknameInput.style.display = "block";
+        avatarContainer.style.display = "block";
         toggleForm.textContent = "已有帳號？點此登入";
       }
       errorMsg.textContent = "";
     });
 
+    togglePwd.addEventListener("click", () => {
+      const type = passwordInput.type === "password" ? "text" : "password";
+      passwordInput.type = type;
+      togglePwd.textContent = type === "password" ? "👁️" : "🙈";
+    });
+
     submitBtn.addEventListener("click", () => {
       errorMsg.textContent = "";
+      emailError.textContent = "";
+      passwordError.textContent = "";
+      nicknameError.textContent = "";
+
       const email = emailInput.value.trim();
       const password = passwordInput.value.trim();
       const nickname = nicknameInput.value.trim();
+      const avatarFile = avatarInput.files[0];
 
-      if (!email || !password || (!isLogin && !nickname)) {
-        errorMsg.textContent = "請完整填寫所有欄位";
-        return;
-      }
+      if (!email) emailError.textContent = "請輸入電子郵件";
+      if (!password) passwordError.textContent = "請輸入密碼";
+      if (!isLogin && !nickname) nicknameError.textContent = "請輸入暱稱";
+
+      if (!email || !password || (!isLogin && !nickname)) return;
 
       if (isLogin) {
-
         auth.signInWithEmailAndPassword(email, password)
-          .then(() => {
-
-            window.location.href = "chat.html";
-          })
-          .catch((error) => {
-            errorMsg.textContent = error.message;
-          });
+          .then(() => window.location.href = "chat.html")
+          .catch((error) => errorMsg.textContent = error.message);
       } else {
-
         auth.createUserWithEmailAndPassword(email, password)
           .then((userCredential) => {
-            // 新使用者建立暱稱資料在DB
             const uid = userCredential.user.uid;
-            db.ref("users/" + uid).set({
-              nickname: nickname,
-              avatarUrl: "",
-              nicknameHistory: []
-            });
-
-            window.location.href = "chat.html";
+            let avatarUrl = "";
+            if (avatarFile) {
+              const storageRef = storage.ref("avatars/" + uid);
+              storageRef.put(avatarFile).then(snapshot => {
+                snapshot.ref.getDownloadURL().then(url => {
+                  avatarUrl = url;
+                  saveUserData(uid, nickname, avatarUrl);
+                });
+              });
+            } else {
+              saveUserData(uid, nickname, avatarUrl);
+            }
           })
-          .catch((error) => {
-            errorMsg.textContent = error.message;
-          });
+          .catch((error) => errorMsg.textContent = error.message);
       }
     });
 
+    function saveUserData(uid, nickname, avatarUrl) {
+      db.ref("users/" + uid).set({
+        nickname: nickname,
+        avatarUrl: avatarUrl,
+        nicknameHistory: []
+      });
+      window.location.href = "chat.html";
+    }
 
     auth.onAuthStateChanged(user => {
-      if (user) {
-        window.location.href = "chat.html";
-      }
+      if (user) window.location.href = "chat.html";
     });
   </script>
 </body>
