@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>簡單聊天室</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="chat-container">
+    <div id="messages" class="chat-box"></div>
+    <div class="input-area">
+      <input type="text" id="messageInput" placeholder="輸入訊息..." />
+      <button onclick="sendMessage()">送出</button>
+    </div>
+  </div>
+
+
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
+
+
+  <script src="script.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>SimpleChat 登入 / 註冊</title>
+  <style>
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html, body {
+  width: 100%;
+  height: 100%;
+}
+
+
+body {
+  display: flex;
+  justify-content: center; /* 水平置中 */
+  align-items: center;     /* 垂直置中 */
+  background: #2c2f33;
+  font-family: "微軟正黑體", sans-serif;
+  color: white;
+}
+
+
+.container {
+  background: #23272a;
+  width: 320px;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+
+.container h2 {
+  text-align: center;
+  margin-bottom: 16px;
+  font-size: 20px;
+}
+
+
+.container input {
+  height: 40px;
+  margin-bottom: 12px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.container button {
+  height: 42px;
+  margin-top: 8px;
+  background-color: #7289da;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.container .toggle {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 14px;
+  color: #99aab5;
+  cursor: pointer;
+}
+#errorMsg {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #f33;
+  text-align: center;
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 id="formTitle">登入 SimpleChat</h2>
+    <input type="email" id="email" placeholder="電子郵件" />
+    <input type="password" id="password" placeholder="密碼" />
+    <input type="text" id="nickname" placeholder="暱稱 (註冊時填寫)" style="display:none"/>
+    <button id="submitBtn">登入</button>
+    <div class="toggle" id="toggleForm">沒有帳號？點此註冊</div>
+    <div id="errorMsg" style="color:#f33; margin-top:10px;"></div>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
+
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
+      authDomain: "simple-chat-41e8d.firebaseapp.com",
+      databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "simple-chat-41e8d",
+      storageBucket: "simple-chat-41e8d.firebasestorage.app",
+      messagingSenderId: "181779135449",
+      appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const nicknameInput = document.getElementById("nickname");
+    const submitBtn = document.getElementById("submitBtn");
+    const toggleForm = document.getElementById("toggleForm");
+    const formTitle = document.getElementById("formTitle");
+    const errorMsg = document.getElementById("errorMsg");
+
+    let isLogin = true;
+
+    toggleForm.addEventListener("click", () => {
+      isLogin = !isLogin;
+      if (isLogin) {
+        formTitle.textContent = "登入 SimpleChat";
+        submitBtn.textContent = "登入";
+        nicknameInput.style.display = "none";
+        toggleForm.textContent = "沒有帳號？點此註冊";
+      } else {
+        formTitle.textContent = "註冊 SimpleChat";
+        submitBtn.textContent = "註冊";
+        nicknameInput.style.display = "block";
+        toggleForm.textContent = "已有帳號？點此登入";
+      }
+      errorMsg.textContent = "";
+    });
+
+    submitBtn.addEventListener("click", () => {
+      errorMsg.textContent = "";
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      const nickname = nicknameInput.value.trim();
+
+      if (!email || !password || (!isLogin && !nickname)) {
+        errorMsg.textContent = "請完整填寫所有欄位";
+        return;
+      }
+
+      if (isLogin) {
+
+        auth.signInWithEmailAndPassword(email, password)
+          .then(() => {
+
+            window.location.href = "chat.html";
+          })
+          .catch((error) => {
+            errorMsg.textContent = error.message;
+          });
+      } else {
+
+        auth.createUserWithEmailAndPassword(email, password)
+          .then((userCredential) => {
+            // 新使用者建立暱稱資料在DB
+            const uid = userCredential.user.uid;
+            db.ref("users/" + uid).set({
+              nickname: nickname,
+              avatarUrl: "",
+              nicknameHistory: []
+            });
+
+            window.location.href = "chat.html";
+          })
+          .catch((error) => {
+            errorMsg.textContent = error.message;
+          });
+      }
+    });
+
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        window.location.href = "chat.html";
+      }
+    });
+  </script>
+</body>
+</html>
