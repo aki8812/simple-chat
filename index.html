@@ -4,6 +4,76 @@
   <meta charset="UTF-8">
   <title>簡單聊天室</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #2c2f33;
+      font-family: "Microsoft JhengHei", sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+    }
+
+    .chat-container {
+      width: 100%;
+      max-width: 600px;
+      height: 80vh;
+      background-color: #23272a;
+      display: flex;
+      flex-direction: column;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .chat-box {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .chat-message {
+      background-color: #36393f;
+      padding: 8px 12px;
+      border-radius: 8px;
+      max-width: 80%;
+      word-break: break-word;
+    }
+
+    .input-area {
+      display: flex;
+      border-top: 1px solid #444;
+    }
+
+    #messageInput {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      font-size: 16px;
+      outline: none;
+      background-color: #2c2f33;
+      color: white;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      background-color: #7289da;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #5b6eae;
+    }
+  </style>
 </head>
 <body>
   <div class="chat-container">
@@ -14,12 +84,57 @@
     </div>
   </div>
 
-
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
+      authDomain: "simple-chat-41e8d.firebaseapp.com",
+      databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "simple-chat-41e8d",
+      storageBucket: "simple-chat-41e8d.firebasestorage.app",
+      messagingSenderId: "181779135449",
+      appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const messagesRef = db.ref("messages");
+
+    function sendMessage() {
+      const input = document.getElementById("messageInput");
+      const message = input.value.trim();
+      if (message === "") return;
+
+      const timestamp = Date.now();
+      const newMessage = {
+        text: message,
+        time: timestamp
+      };
+
+      messagesRef.push(newMessage);
+      input.value = "";
+    }
 
 
-  <script src="script.js"></script>
+    document.getElementById("messageInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    });
+
+    messagesRef.on("child_added", function(snapshot) {
+      const message = snapshot.val();
+      const time = new Date(message.time).toLocaleTimeString();
+      const msgElement = document.createElement("div");
+      msgElement.className = "chat-message";
+      msgElement.textContent = `[${time}] ${message.text}`;
+      document.getElementById("messages").appendChild(msgElement);
+
+
+      const box = document.getElementById("messages");
+      box.scrollTop = box.scrollHeight;
+    });
+  </script>
 </body>
 </html>
-
