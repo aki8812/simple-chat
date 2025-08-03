@@ -2,234 +2,93 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>SimpleChat 登入 / 註冊</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html, body {
-      width: 100%;
-      height: 100%;
-    }
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: #2c2f33;
-      font-family: "微軟正黑體", sans-serif;
-      color: white;
-    }
-    .container {
-      background: #23272a;
-      width: 340px;
-      padding: 24px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-      display: flex;
-      flex-direction: column;
-    }
-    .container h2 {
-      text-align: center;
-      margin-bottom: 16px;
-      font-size: 20px;
-    }
-    .container input[type="email"],
-    .container input[type="password"],
-    .container input[type="text"],
-    .container input[type="file"] {
-      height: 40px;
-      margin-bottom: 6px;
-      padding: 0 12px;
-      border: none;
-      border-radius: 4px;
-      font-size: 14px;
-      background-color: #fff;
-      color: #000;
-    }
-    .container button {
-      height: 42px;
-      margin-top: 12px;
-      background-color: #7289da;
-      border: none;
-      border-radius: 4px;
-      font-size: 16px;
-      cursor: pointer;
-      color: white;
-    }
-    .container .toggle {
-      margin-top: 12px;
-      text-align: center;
-      font-size: 14px;
-      color: #99aab5;
-      cursor: pointer;
-    }
-    .input-group {
-      position: relative;
-    }
-    .show-password {
-      position: absolute;
-      top: 50%;
-      right: 12px;
-      transform: translateY(-50%);
-      cursor: pointer;
-      font-size: 14px;
-      color: #666;
-    }
-    .error {
-      font-size: 12px;
-      color: #f66;
-      margin: 0 0 10px 4px;
-    }
-    .file-label {
-      font-size: 13px;
-      color: #ccc;
-      margin: 6px 0 2px;
-    }
-  </style>
+  <title>登入 / 註冊 - SimpleChat</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="favicon.ico">
 </head>
 <body>
   <div class="container">
     <h2 id="formTitle">登入 SimpleChat</h2>
-    <input type="email" id="email" placeholder="電子郵件" />
-    <div class="error" id="emailError"></div>
-
-    <div class="input-group">
-      <input type="password" id="password" placeholder="密碼" />
-      <span class="show-password" id="togglePwd">👁️</span>
+    <input type="email" id="email" placeholder="電子郵件">
+    <div class="password-wrapper">
+      <input type="password" id="password" placeholder="密碼">
+      <span id="togglePassword">👁️</span>
     </div>
-    <div class="error" id="passwordError"></div>
-
-    <input type="text" id="nickname" placeholder="名稱 (註冊時填寫)" style="display:none"/>
-    <div class="error" id="nicknameError"></div>
-
-    <div id="avatarContainer" style="display:none;">
-      <label class="file-label">選擇頭像：</label>
-      <input type="file" id="avatarInput" accept="image/*" />
-    </div>
-    
+    <input type="text" id="nickname" placeholder="暱稱（註冊時填寫）" style="display:none">
+    <label id="avatarLabel" style="display:none; font-size:13px; color:white;">
+      選擇頭像：<input type="file" id="avatar" accept="image/*">
+    </label>
     <button id="submitBtn">登入</button>
-    <div class="toggle" id="toggleForm">沒有帳號？點此註冊</div>
-    <div id="errorMsg" class="error" style="text-align:center;"></div>
+    <div id="toggleForm" class="toggle">沒有帳號？<span class="blue">點此註冊</span></div>
+    <div id="errorMsg" class="error"></div>
   </div>
 
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-storage-compat.js"></script>
+  <script src="firebase.js"></script>
   <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
-      authDomain: "simple-chat-41e8d.firebaseapp.com",
-      databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "simple-chat-41e8d",
-      storageBucket: "simple-chat-41e8d.appspot.com",
-      messagingSenderId: "181779135449",
-      appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.database();
-    const storage = firebase.storage();
-
-    const emailInput = document.getElementById("email");
-    const passwordInput = document.getElementById("password");
-    const nicknameInput = document.getElementById("nickname");
-    const avatarInput = document.getElementById("avatarInput");
-    const avatarContainer = document.getElementById("avatarContainer");
-
-    const submitBtn = document.getElementById("submitBtn");
-    const toggleForm = document.getElementById("toggleForm");
-    const formTitle = document.getElementById("formTitle");
-    const errorMsg = document.getElementById("errorMsg");
-
-    const emailError = document.getElementById("emailError");
-    const passwordError = document.getElementById("passwordError");
-    const nicknameError = document.getElementById("nicknameError");
-
-    const togglePwd = document.getElementById("togglePwd");
+    const email = document.getElementById("email"),
+          password = document.getElementById("password"),
+          nickname = document.getElementById("nickname"),
+          avatar = document.getElementById("avatar"),
+          submitBtn = document.getElementById("submitBtn"),
+          toggleForm = document.getElementById("toggleForm"),
+          formTitle = document.getElementById("formTitle"),
+          errorMsg = document.getElementById("errorMsg"),
+          togglePassword = document.getElementById("togglePassword");
 
     let isLogin = true;
+    togglePassword.style.cursor = "pointer";
+    togglePassword.onclick = () => password.type = password.type==="password"?"text":"password";
 
-    toggleForm.addEventListener("click", () => {
+    toggleForm.onclick = () => {
       isLogin = !isLogin;
-      if (isLogin) {
-        formTitle.textContent = "登入 SimpleChat";
-        submitBtn.textContent = "登入";
-        nicknameInput.style.display = "none";
-        avatarContainer.style.display = "none";
-        toggleForm.textContent = "沒有帳號？點此註冊";
-      } else {
-        formTitle.textContent = "註冊 SimpleChat";
-        submitBtn.textContent = "註冊";
-        nicknameInput.style.display = "block";
-        avatarContainer.style.display = "block";
-        toggleForm.textContent = "已有帳號？點此登入";
-      }
+      formTitle.textContent = isLogin?"登入 SimpleChat":"註冊 SimpleChat";
+      submitBtn.textContent = isLogin?"登入":"註冊";
+      nickname.style.display = isLogin?"none":"block";
+      document.getElementById("avatarLabel").style.display = isLogin?"none":"block";
       errorMsg.textContent = "";
-    });
+    };
 
-    togglePwd.addEventListener("click", () => {
-      const type = passwordInput.type === "password" ? "text" : "password";
-      passwordInput.type = type;
-      togglePwd.textContent = type === "password" ? "👁️" : "🙈";
-    });
-
-    submitBtn.addEventListener("click", () => {
+    submitBtn.onclick = async () => {
       errorMsg.textContent = "";
-      emailError.textContent = "";
-      passwordError.textContent = "";
-      nicknameError.textContent = "";
-
-      const email = emailInput.value.trim();
-      const password = passwordInput.value.trim();
-      const nickname = nicknameInput.value.trim();
-      const avatarFile = avatarInput.files[0];
-
-      if (!email) emailError.textContent = "請輸入電子郵件";
-      if (!password) passwordError.textContent = "請輸入密碼";
-      if (!isLogin && !nickname) nicknameError.textContent = "請輸入暱稱";
-
-      if (!email || !password || (!isLogin && !nickname)) return;
-
-      if (isLogin) {
-        auth.signInWithEmailAndPassword(email, password)
-          .then(() => window.location.href = "chat.html")
-          .catch((error) => errorMsg.textContent = error.message);
-      } else {
-        auth.createUserWithEmailAndPassword(email, password)
-          .then((userCredential) => {
-            const uid = userCredential.user.uid;
-            let avatarUrl = "";
-            if (avatarFile) {
-              const storageRef = storage.ref("avatars/" + uid);
-              storageRef.put(avatarFile).then(snapshot => {
-                snapshot.ref.getDownloadURL().then(url => {
-                  avatarUrl = url;
-                  saveUserData(uid, nickname, avatarUrl);
-                });
-              });
-            } else {
-              saveUserData(uid, nickname, avatarUrl);
-            }
-          })
-          .catch((error) => errorMsg.textContent = error.message);
+      if (!email.value || !password.value || (!isLogin && !nickname.value)) {
+        errorMsg.textContent = "請完整填寫所有欄位";
+        return;
       }
-    });
+      try {
+        if (isLogin) {
+          await auth.signInWithEmailAndPassword(email.value, password.value);
+        } else {
+          const cred = await auth.createUserWithEmailAndPassword(email.value, password.value);
+          const uid = cred.user.uid;
+          let avatarUrl = "";
+          if (avatar.files[0]) {
+            const snap = await storage.ref("avatars/" + uid).put(avatar.files[0]);
+            avatarUrl = await snap.ref.getDownloadURL();
+          }
+          await db.ref("users/" + uid).set({
+            nickname: nickname.value,
+            avatarUrl,
+            nicknameHistory: []
+          });
+        }
+        window.location.href = "chat.html";
+      } catch(err) {
+        const code = err.code;
+        if (code==="auth/invalid-email") errorMsg.textContent = "電子郵件格式不正確";
+        else if (code==="auth/email-already-in-use") errorMsg.textContent = "此信箱已被註冊";
+        else if (code==="auth/user-not-found") errorMsg.textContent = "帳號不存在";
+        else if (code==="auth/wrong-password") errorMsg.textContent = "密碼錯誤";
+        else if (code==="auth/weak-password") errorMsg.textContent = "密碼需至少6碼";
+        else errorMsg.textContent = "發生錯誤：" + err.message;
+      }
+    };
 
-    function saveUserData(uid, nickname, avatarUrl) {
-      db.ref("users/" + uid).set({
-        nickname: nickname,
-        avatarUrl: avatarUrl,
-        nicknameHistory: []
-      });
-      window.location.href = "chat.html";
-    }
-
-    auth.onAuthStateChanged(user => {
-      if (user) window.location.href = "chat.html";
-    });
+    auth.onAuthStateChanged(u => { if (u) window.location.href = "chat.html"; });
   </script>
 </body>
 </html>
