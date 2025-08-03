@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>登入 / 註冊 - SimpleChat</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style2.css">
   <link rel="icon" href="favicon.ico">
 </head>
 <body>
@@ -23,13 +23,16 @@
     <div id="errorMsg" class="error"></div>
   </div>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-storage-compat.js"></script>
-  <script src="firebase.js"></script>
-  <script>
+  <script type="module">
+    import { auth, db, storage } from "./firebase.js";
+    import {
+      onAuthStateChanged,
+      signInWithEmailAndPassword,
+      createUserWithEmailAndPassword
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import { ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
+    import { ref as dbRef, set } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
     const email = document.getElementById("email"),
           password = document.getElementById("password"),
           nickname = document.getElementById("nickname"),
@@ -61,16 +64,18 @@
       }
       try {
         if (isLogin) {
-          await auth.signInWithEmailAndPassword(email.value, password.value);
+          await signInWithEmailAndPassword(auth, email.value, password.value);
         } else {
-          const cred = await auth.createUserWithEmailAndPassword(email.value, password.value);
+          const cred = await createUserWithEmailAndPassword(auth, email.value, password.value);
           const uid = cred.user.uid;
           let avatarUrl = "";
           if (avatar.files[0]) {
-            const snap = await storage.ref("avatars/" + uid).put(avatar.files[0]);
-            avatarUrl = await snap.ref.getDownloadURL();
+            const storageRefInstance = storageRef(storage, "avatars/" + uid);
+            const snap = await uploadBytes(storageRefInstance, avatar.files[0]);
+            avatarUrl = await getDownloadURL(snap.ref);
           }
-          await db.ref("users/" + uid).set({
+          const userRef = dbRef(db, "users/" + uid);
+          await set(userRef, {
             nickname: nickname.value,
             avatarUrl,
             nicknameHistory: []
@@ -88,7 +93,7 @@
       }
     };
 
-    auth.onAuthStateChanged(u => { if (u) window.location.href = "chat.html"; });
+    onAuthStateChanged(auth, u => { if (u) window.location.href = "chat.html"; });
   </script>
 </body>
 </html>
