@@ -1,0 +1,10 @@
+<script type="module">
+import { auth } from "./firebase.js";
+auth.onAuthStateChanged(user => {
+  if (user) {
+    window.location.href = "chat.html"; 
+  } else {
+    window.location.href = "login.html"; 
+  }
+});
+</script>
