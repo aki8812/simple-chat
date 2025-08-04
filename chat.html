@@ -84,11 +84,32 @@
     </div>
   </div>
 
-  <script type="module">
-    import { db } from "./firebase.js";
-    import { ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
 
-    const messagesRef = ref(db, "messages");
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
+      authDomain: "simple-chat-41e8d.firebaseapp.com",
+      databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "simple-chat-41e8d",
+      storageBucket: "simple-chat-41e8d.firebasestorage.app",
+      messagingSenderId: "181779135449",
+      appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+    const messagesRef = db.ref("messages");
+
+
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        window.location.href = "login.html";
+      }
+    });
 
     function sendMessage() {
       const input = document.getElementById("messageInput");
@@ -101,7 +122,7 @@
         time: timestamp
       };
 
-      push(messagesRef, newMessage);
+      messagesRef.push(newMessage);
       input.value = "";
     }
 
@@ -112,7 +133,7 @@
       }
     });
 
-    onChildAdded(messagesRef, (snapshot) => {
+    messagesRef.on("child_added", function(snapshot) {
       const message = snapshot.val();
       const time = new Date(message.time).toLocaleTimeString();
       const msgElement = document.createElement("div");
@@ -120,11 +141,10 @@
       msgElement.textContent = `[${time}] ${message.text}`;
       document.getElementById("messages").appendChild(msgElement);
 
+
       const box = document.getElementById("messages");
       box.scrollTop = box.scrollHeight;
     });
-
-    window.sendMessage = sendMessage;
   </script>
 </body>
 </html>
