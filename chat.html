@@ -103,28 +103,15 @@
     const auth = firebase.auth();
     const db = firebase.database();
     const messagesRef = db.ref("messages");
-    
-
-    let currentUser = null;
 
 
     auth.onAuthStateChanged(user => {
       if (!user) {
-
         window.location.href = "login.html";
-      } else {
-
-        currentUser = user;
       }
     });
 
     function sendMessage() {
-      if (!currentUser) {
-
-        console.error("User not logged in.");
-        return;
-      }
-
       const input = document.getElementById("messageInput");
       const message = input.value.trim();
       if (message === "") return;
@@ -132,8 +119,7 @@
       const timestamp = Date.now();
       const newMessage = {
         text: message,
-        time: timestamp,
-        uid: currentUser.uid 
+        time: timestamp
       };
 
       messagesRef.push(newMessage);
@@ -152,10 +138,10 @@
       const time = new Date(message.time).toLocaleTimeString();
       const msgElement = document.createElement("div");
       msgElement.className = "chat-message";
-      
       msgElement.textContent = `[${time}] ${message.text}`;
-
       document.getElementById("messages").appendChild(msgElement);
+
+
       const box = document.getElementById("messages");
       box.scrollTop = box.scrollHeight;
     });
