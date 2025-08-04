@@ -40,6 +40,7 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
+    
 
 
     const email = document.getElementById("email"),
@@ -76,21 +77,12 @@
           await auth.signInWithEmailAndPassword(email.value, password.value);
         } else {
 
-          const nicknameRef = db.ref("users").orderByChild("nickname").equalTo(nickname.value.trim());
-          const snapshot = await nicknameRef.once("value");
-
-          if (snapshot.exists()) {
-            errorMsg.textContent = "此暱稱已被使用，請選擇其他暱稱";
-            return;
-          }
-
-
           const cred = await auth.createUserWithEmailAndPassword(email.value, password.value);
           const uid = cred.user.uid;
           
-          let avatarBase64 = "";
+          let avatarData = "";
           if (avatar.files[0]) {
-            avatarBase64 = await new Promise((resolve) => {
+            avatarData = await new Promise((resolve) => {
               const reader = new FileReader();
               reader.onload = (e) => resolve(e.target.result);
               reader.readAsDataURL(avatar.files[0]);
@@ -99,7 +91,7 @@
 
           await db.ref("users/" + uid).set({
             nickname: nickname.value,
-            avatarBase64: avatarBase64,
+            avatarBase64: avatarData, 
             nicknameHistory: []
           });
         }
@@ -115,8 +107,9 @@
       }
     };
 
-    auth.onAuthStateChanged(u => { if (u) window.location.href = "chat.html"; });
+    auth.onAuthStateChanged(u => {
+      if (u) window.location.href = "chat.html";
+    });
   </script>
 </body>
 </html>
-
