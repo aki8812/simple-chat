@@ -23,15 +23,25 @@
     <div id="errorMsg" class="error"></div>
   </div>
 
-  <script type="module">
-    import { auth, db, storage } from "./firebase.js";
-    import {
-      onAuthStateChanged,
-      signInWithEmailAndPassword,
-      createUserWithEmailAndPassword
-    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
-    import { ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
-    import { ref as dbRef, set } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
+      authDomain: "simple-chat-41e8d.firebaseapp.com",
+      databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "simple-chat-41e8d",
+      storageBucket: "simple-chat-41e8d.firebasestorage.app",
+      messagingSenderId: "181779135449",
+      appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+    
+
 
     const email = document.getElementById("email"),
           password = document.getElementById("password"),
@@ -64,20 +74,24 @@
       }
       try {
         if (isLogin) {
-          await signInWithEmailAndPassword(auth, email.value, password.value);
+          await auth.signInWithEmailAndPassword(email.value, password.value);
         } else {
-          const cred = await createUserWithEmailAndPassword(auth, email.value, password.value);
+
+          const cred = await auth.createUserWithEmailAndPassword(email.value, password.value);
           const uid = cred.user.uid;
-          let avatarUrl = "";
+          
+          let avatarData = "";
           if (avatar.files[0]) {
-            const storageRefInstance = storageRef(storage, "avatars/" + uid);
-            const snap = await uploadBytes(storageRefInstance, avatar.files[0]);
-            avatarUrl = await getDownloadURL(snap.ref);
+            avatarData = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => resolve(e.target.result);
+              reader.readAsDataURL(avatar.files[0]);
+            });
           }
-          const userRef = dbRef(db, "users/" + uid);
-          await set(userRef, {
+
+          await db.ref("users/" + uid).set({
             nickname: nickname.value,
-            avatarUrl,
+            avatarBase64: avatarData, // 儲存 Base64 字串
             nicknameHistory: []
           });
         }
@@ -93,7 +107,9 @@
       }
     };
 
-    onAuthStateChanged(auth, u => { if (u) window.location.href = "chat.html"; });
+    auth.onAuthStateChanged(u => {
+      if (u) window.location.href = "chat.html";
+    });
   </script>
 </body>
 </html>
