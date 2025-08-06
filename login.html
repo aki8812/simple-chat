@@ -15,9 +15,7 @@
       <span id="togglePassword">👁️</span>
     </div>
     <input type="text" id="nickname" placeholder="暱稱（註冊時填寫）" style="display:none">
-    <label id="avatarLabel" style="display:none; font-size:13px; color:white;">
-      選擇頭像：<input type="file" id="avatar" accept="image/*">
-    </label>
+    
     <button id="submitBtn">登入</button>
     <div id="toggleForm" class="toggle">沒有帳號？<span class="blue">點此註冊</span></div>
     <div id="errorMsg" class="error"></div>
@@ -26,6 +24,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
+  
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
@@ -41,12 +40,9 @@
     const auth = firebase.auth();
     const db = firebase.database();
     
-
-
     const email = document.getElementById("email"),
           password = document.getElementById("password"),
           nickname = document.getElementById("nickname"),
-          avatar = document.getElementById("avatar"),
           submitBtn = document.getElementById("submitBtn"),
           toggleForm = document.getElementById("toggleForm"),
           formTitle = document.getElementById("formTitle"),
@@ -62,7 +58,6 @@
       formTitle.textContent = isLogin?"登入 SimpleChat":"註冊 SimpleChat";
       submitBtn.textContent = isLogin?"登入":"註冊";
       nickname.style.display = isLogin?"none":"block";
-      document.getElementById("avatarLabel").style.display = isLogin?"none":"block";
       errorMsg.textContent = "";
     };
 
@@ -76,23 +71,20 @@
         if (isLogin) {
           await auth.signInWithEmailAndPassword(email.value, password.value);
         } else {
+          const nicknameRef = db.ref("users").orderByChild("nickname").equalTo(nickname.value.trim());
+          const snapshot = await nicknameRef.once("value");
+
+          if (snapshot.exists()) {
+            errorMsg.textContent = "此暱稱已被使用，請選擇其他暱稱";
+            return;
+          }
 
           const cred = await auth.createUserWithEmailAndPassword(email.value, password.value);
           const uid = cred.user.uid;
           
-          let avatarData = "";
-          if (avatar.files[0]) {
-            avatarData = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = (e) => resolve(e.target.result);
-              reader.readAsDataURL(avatar.files[0]);
-            });
-          }
-
           await db.ref("users/" + uid).set({
             nickname: nickname.value,
-            avatarBase64: avatarData,
-            nicknameHistory: []
+
           });
         }
         window.location.href = "chat.html";
@@ -107,9 +99,7 @@
       }
     };
 
-    auth.onAuthStateChanged(u => {
-      if (u) window.location.href = "chat.html";
-    });
+    auth.onAuthStateChanged(u => { if (u) window.location.href = "chat.html"; });
   </script>
 </body>
 </html>
