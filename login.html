@@ -91,7 +91,7 @@
 
           await db.ref("users/" + uid).set({
             nickname: nickname.value,
-            avatarBase64: avatarData, 
+            avatarBase64: avatarData,
             nicknameHistory: []
           });
         }
