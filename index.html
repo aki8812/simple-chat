@@ -13,13 +13,6 @@
 
 
   <script type="module">
-
-    const hardFailToLogin = (why) => {
-      try { console.error('[redirect guard]', why); } catch {}
-      try { window.location.replace('login.html'); } catch {}
-    };
-
-
     Promise.resolve()
       .then(async () => {
         try {
@@ -36,10 +29,7 @@
           };
 
 
-          const safetyTimer = setTimeout(() => go('login.html'), 3000);
-
           onAuthStateChanged(auth, (user) => {
-            clearTimeout(safetyTimer);
             if (user) go('chat.html');
             else go('login.html');
           }, (err) => {
@@ -47,10 +37,11 @@
             go('login.html');
           });
         } catch (e) {
-          hardFailToLogin(e);
+          try { console.error('[redirect guard]', e); } catch {}
+          try { window.location.replace('login.html'); } catch {}
         }
       })
-      .catch(hardFailToLogin);
+      .catch((e)=>{ try { console.error('[redirect guard]', e); } catch {}; try { window.location.replace('login.html'); } catch {}; });
   </script>
 </body>
 </html>
