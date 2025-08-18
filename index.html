@@ -1,45 +1,43 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>載入中...</title>
+  <meta charset="UTF-8" />
+  <title>載入中…</title>
+  <link rel="icon" href="favicon.ico" />
   <style>
-    body {
-      background-color: #2c2f33;
-      color: white;
-      font-family: sans-serif;
-      text-align: center;
-      padding-top: 100px;
-    }
+    body { background:#2c2f33; color:#fff; font-family:sans-serif; text-align:center; padding-top:100px; margin:0; }
   </style>
-  
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
-  
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
-      authDomain: "simple-chat-41e8d.firebaseapp.com",
-      databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "simple-chat-41e8d",
-      storageBucket: "simple-chat-41e8d.firebasestorage.app",
-      messagingSenderId: "181779135449",
-      appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-
-    auth.onAuthStateChanged(user => {
-      if (user) {
-        window.location.href = "chat.html";
-      } else {
-        window.location.href = "login.html";
-      }
-    });
-  </script>
 </head>
 <body>
-  <h1>Redirecting...</h1>
+  <h1>Redirecting…</h1>
+
+
+  <script type="module">
+    import { auth } from './firebase.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        window.location.replace('chat.html');
+      } else {
+        window.location.replace('login.html');
+      }
+    });
+
+
+    setTimeout(async () => {
+      try {
+        const u = auth.currentUser;
+        if (u) {
+          window.location.replace('chat.html');
+        } else {
+          window.location.replace('login.html');
+        }
+      } catch (_) {
+        window.location.replace('login.html');
+      }
+    }, 3000);
+  </script>
 </body>
 </html>
