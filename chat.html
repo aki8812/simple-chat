@@ -1,172 +1,85 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>簡單聊天室</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="favicon.ico" />
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: #2c2f33;
-      font-family: "Microsoft JhengHei", sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      color: white;
-    }
 
-    .chat-container {
-      width: 100%;
-      max-width: 600px;
-      height: 80vh;
-      background-color: #23272a;
-      display: flex;
-      flex-direction: column;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-      overflow: hidden;
-    }
-
-    .chat-box {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .chat-message {
-      background-color: #36393f;
-      padding: 8px 12px;
-      border-radius: 8px;
-      max-width: 80%;
-      word-break: break-word;
-    }
-
-    .input-area {
-      display: flex;
-      border-top: 1px solid #444;
-    }
-
-    #messageInput {
-      flex: 1;
-      padding: 10px;
-      border: none;
-      font-size: 16px;
-      outline: none;
-      background-color: #2c2f33;
-      color: white;
-    }
-
-    button {
-      padding: 10px 20px;
-      border: none;
-      background-color: #7289da;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background-color: #5b6eae;
-    }
+    .input-area button { min-width: 92px; }
   </style>
 </head>
 <body>
   <div class="chat-container">
-    <div id="messages" class="chat-box"></div>
+    <div id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></div>
     <div class="input-area">
-      <input type="text" id="messageInput" placeholder="輸入訊息..." />
-      <button onclick="sendMessage()">送出</button>
+      <input type="text" id="messageInput" placeholder="輸入訊息..." autocomplete="off" />
+      <button id="sendBtn" type="button">送出</button>
     </div>
   </div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-database-compat.js"></script>
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyB9XkO17IHNggQwL__8ock3KCZOlBP8wcA",
-      authDomain: "simple-chat-41e8d.firebaseapp.com",
-      databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "simple-chat-41e8d",
-      storageBucket: "simple-chat-41e8d.firebasestorage.app",
-      messagingSenderId: "181779135449",
-      appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
-    };
+  <script type="module">
+    import { auth, db } from './firebase.js';
+    import { ref, push, onChildAdded } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
 
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.database();
-    const messagesRef = db.ref("messages");
-    
-    let currentUser = null;
-    const usersData = {}; 
 
-    auth.onAuthStateChanged(user => {
+    onAuthStateChanged(auth, (user) => {
       if (!user) {
-        window.location.href = "login.html";
-      } else {
-        currentUser = user;
+
+        window.location.href = 'login.html';
       }
     });
 
-    function sendMessage() {
-      if (!currentUser) {
-        console.error("User not logged in.");
-        return;
-      }
 
-      const input = document.getElementById("messageInput");
-      const message = input.value.trim();
-      if (message === "") return;
+    const messagesRef = ref(db, 'messages');
 
-      const timestamp = Date.now();
-      const newMessage = {
-        text: message,
-        time: timestamp,
-        uid: currentUser.uid
+
+    const inputEl = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const messagesBox = document.getElementById('messages');
+
+    async function sendMessage() {
+      const text = (inputEl.value || '').trim();
+      if (!text) return;
+
+      const msg = {
+        text,
+        time: Date.now(),
       };
 
-      messagesRef.push(newMessage);
-      input.value = "";
+      try {
+        await push(messagesRef, msg);
+        inputEl.value = '';
+        inputEl.focus();
+      } catch (err) {
+        console.error('送出訊息失敗：', err);
+        alert('訊息傳送失敗，請稍後再試。');
+      }
     }
 
-    document.getElementById("messageInput").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
         sendMessage();
       }
     });
+    sendBtn.addEventListener('click', sendMessage);
 
-    messagesRef.on("child_added", async function(snapshot) {
+
+    onChildAdded(messagesRef, (snapshot) => {
       const message = snapshot.val();
-      const time = new Date(message.time).toLocaleTimeString();
-      const msgElement = document.createElement("div");
-      
-      let nickname = "匿名";
-      
-      if (message.uid) {
-        if (!usersData[message.uid]) {
-          const userSnapshot = await db.ref("users/" + message.uid).once("value");
-          if (userSnapshot.exists()) {
-            usersData[message.uid] = userSnapshot.val();
-          }
-        }
-        if (usersData[message.uid]) {
-          nickname = usersData[message.uid].nickname || "匿名";
-        }
-      }
-      
-      msgElement.className = "chat-message";
-      msgElement.textContent = `[${time}] ${nickname}: ${message.text}`;
+      const timeStr = new Date(message.time).toLocaleTimeString();
 
-      document.getElementById("messages").appendChild(msgElement);
-      const box = document.getElementById("messages");
-      box.scrollTop = box.scrollHeight;
+      const msgElement = document.createElement('div');
+      msgElement.className = 'chat-message';
+      msgElement.textContent = `[${timeStr}] ${message.text}`;
+
+      messagesBox.appendChild(msgElement);
+      messagesBox.scrollTop = messagesBox.scrollHeight;
     });
   </script>
 </body>
