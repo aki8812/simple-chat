@@ -13,31 +13,44 @@
 
 
   <script type="module">
-    import { auth } from './firebase.js';
-    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+
+    const hardFailToLogin = (why) => {
+      try { console.error('[redirect guard]', why); } catch {}
+      try { window.location.replace('login.html'); } catch {}
+    };
 
 
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        window.location.replace('chat.html');
-      } else {
-        window.location.replace('login.html');
-      }
-    });
+    Promise.resolve()
+      .then(async () => {
+        try {
+          const [{ auth }, { onAuthStateChanged }] = await Promise.all([
+            import('./firebase.js'),
+            import('https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js')
+          ]);
+
+          let redirected = false;
+          const go = (url) => {
+            if (redirected) return;
+            redirected = true;
+            window.location.replace(url);
+          };
 
 
-    setTimeout(async () => {
-      try {
-        const u = auth.currentUser;
-        if (u) {
-          window.location.replace('chat.html');
-        } else {
-          window.location.replace('login.html');
+          const safetyTimer = setTimeout(() => go('login.html'), 3000);
+
+          onAuthStateChanged(auth, (user) => {
+            clearTimeout(safetyTimer);
+            if (user) go('chat.html');
+            else go('login.html');
+          }, (err) => {
+            console.error('onAuthStateChanged error', err);
+            go('login.html');
+          });
+        } catch (e) {
+          hardFailToLogin(e);
         }
-      } catch (_) {
-        window.location.replace('login.html');
-      }
-    }, 3000);
+      })
+      .catch(hardFailToLogin);
   </script>
 </body>
 </html>
