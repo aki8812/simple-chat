@@ -1,155 +1,58 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="UTF-8" />
-  <title>登入 / 註冊 - SimpleChat</title>
-  <link rel="stylesheet" href="style2.css" />
-  <link rel="icon" href="favicon.ico" />
-</head>
-<body>
-  <div class="container">
-    <h2 id="formTitle">登入 SimpleChat</h2>
-
-    <input type="email" id="email" placeholder="電子郵件" />
-
-    <div class="password-wrapper">
-      <input type="password" id="password" placeholder="密碼" />
-      <span id="togglePassword" title="顯示/隱藏密碼">👁️</span>
-    </div>
-
-    <input type="text" id="nickname" placeholder="暱稱（註冊時填寫）" style="display:none" />
-
-    <label id="avatarLabel" style="display:none; font-size:13px; color:white;">
-      選擇頭像：<input type="file" id="avatar" accept="image/*" />
-    </label>
-
-    <button id="submitBtn">登入</button>
-
-    <div id="toggleForm" class="toggle">沒有或已有帳號？<span class="blue">點此註冊 / 登入</span></div>
-
-    <div id="errorMsg" class="error"></div>
-  </div>
+const existed = await get(ref(db, `nicknames/${lower}`));
+if (existed.exists()) { errorMsg.textContent = '暱稱已被使用，請換一個'; return; }
 
 
-  <script type="module">
-    import { auth, db } from './firebase.js';
-    import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, set } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
+const uid = cred.user.uid;
 
 
-    const email = document.getElementById('email');
-    const password = document.getElementById('password');
-    const nickname = document.getElementById('nickname');
-    const avatar = document.getElementById('avatar');
-    const submitBtn = document.getElementById('submitBtn');
-    const toggleForm = document.getElementById('toggleForm');
-    const formTitle = document.getElementById('formTitle');
-    const errorMsg = document.getElementById('errorMsg');
-    const togglePassword = document.getElementById('togglePassword');
+// 以交易方式佔用暱稱（防競態）
+const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
+if (cur === null) return uid; // 佔用成功
+return; // 中止交易
+});
+if (!res.committed) { throw new Error('暱稱已被使用，請換一個'); }
 
 
-    let isLogin = true;
+await set(ref(db, `users/${uid}/profile`), {
+nickname: nick,
+nicknameLower: lower,
+registeredAt: Date.now()
+});
+await set(ref(db, `users/${uid}/private`), { email: emailVal });
 
 
-    togglePassword.style.cursor = 'pointer';
-    togglePassword.addEventListener('click', () => {
-      password.type = password.type === 'password' ? 'text' : 'password';
-    });
+// 寄送驗證信（登入後即可去聊天室，但未驗證無法發話）
+await sendEmailVerification(cred.user);
+}
+window.location.href = 'chat.html';
+} catch (err) {
+errorMsg.textContent = mapAuthErrorToZh(err);
+}
+}
 
 
-    toggleForm.addEventListener('click', () => {
-      isLogin = !isLogin;
-      formTitle.textContent = isLogin ? '登入 SimpleChat' : '註冊 SimpleChat';
-      submitBtn.textContent = isLogin ? '登入' : '註冊';
-      nickname.style.display = isLogin ? 'none' : 'block';
-      document.getElementById('avatarLabel').style.display = isLogin ? 'none' : 'block';
-      errorMsg.textContent = '';
-    });
+;[email, password, nickname].forEach((el) => {
+el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
+});
 
 
-    submitBtn.addEventListener('click', handleSubmit);
-
-    async function handleSubmit() {
-      errorMsg.textContent = '';
-      const emailVal = (email.value || '').trim();
-      const pwdVal = (password.value || '').trim();
-
-      if (!emailVal || !pwdVal || (!isLogin && !(nickname.value || '').trim())) {
-        errorMsg.textContent = '請完整填寫所有欄位';
-        return;
-      }
-
-      try {
-        if (isLogin) {
-          await signInWithEmailAndPassword(auth, emailVal, pwdVal);
-        } else {
-          const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
-          const uid = cred.user.uid;
+onAuthStateChanged(auth, (u) => { if (u) window.location.href = 'chat.html'; });
 
 
-          let avatarData = '';
-          if (avatar.files && avatar.files[0]) {
-            avatarData = await fileToBase64(avatar.files[0]);
-          }
-
-          await set(ref(db, `users/${uid}`), {
-            nickname: (nickname.value || '').trim(),
-            avatarBase64: avatarData,
-            nicknameHistory: [],
-            registeredAt: Date.now()
-          });
-        }
-
-
-        window.location.href = 'chat.html';
-      } catch (err) {
-        errorMsg.textContent = mapAuthErrorToZh(err);
-      }
-    }
-
-
-    ;[email, password, nickname].forEach((el) => {
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') handleSubmit();
-      });
-    });
-
-
-    onAuthStateChanged(auth, (u) => {
-      if (u) {
-        window.location.href = 'chat.html';
-      }
-    });
-
-    // ===== Utils =====
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    function mapAuthErrorToZh(error) {
-      const code = error?.code || '';
-      switch (code) {
-        case 'auth/invalid-email':
-          return '電子郵件格式不正確';
-        case 'auth/email-already-in-use':
-          return '此信箱已被註冊';
-        case 'auth/user-not-found':
-          return '帳號不存在';
-        case 'auth/wrong-password':
-          return '密碼錯誤';
-        case 'auth/weak-password':
-          return '密碼需至少 6 碼';
-        case 'auth/network-request-failed':
-          return '網路異常，請檢查連線';
-        default:
-          return `發生錯誤：${error?.message || String(error)}`;
-      }
-    }
-  </script>
+function mapAuthErrorToZh(error) {
+const code = error?.code || '';
+switch (code) {
+case 'auth/invalid-email': return '電子郵件格式不正確';
+case 'auth/email-already-in-use': return '此信箱已被註冊';
+case 'auth/user-not-found': return '帳號不存在';
+case 'auth/wrong-password': return '密碼錯誤';
+case 'auth/weak-password': return '密碼需至少 6 碼';
+case 'auth/network-request-failed': return '網路異常，請檢查連線';
+default: return `發生錯誤：${error?.message || String(error)}`;
+}
+}
+</script>
 </body>
 </html>

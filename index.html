@@ -1,47 +1,30 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <title>載入中…</title>
-  <link rel="icon" href="favicon.ico" />
-  <style>
-    body { background:#2c2f33; color:#fff; font-family:sans-serif; text-align:center; padding-top:100px; margin:0; }
-  </style>
+<meta charset="UTF-8" />
+<title>SimpleChat</title>
+<link rel="icon" href="favicon.ico" />
+<style>
+body { background:#2c2f33; color:#fff; font-family:sans-serif; text-align:center; padding-top:100px; margin:0; }
+</style>
 </head>
 <body>
-  <h1>Redirecting…</h1>
-
-
-  <script type="module">
-    Promise.resolve()
-      .then(async () => {
-        try {
-          const [{ auth }, { onAuthStateChanged }] = await Promise.all([
-            import('./firebase.js'),
-            import('https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js')
-          ]);
-
-          let redirected = false;
-          const go = (url) => {
-            if (redirected) return;
-            redirected = true;
-            window.location.replace(url);
-          };
-
-
-          onAuthStateChanged(auth, (user) => {
-            if (user) go('chat.html');
-            else go('login.html');
-          }, (err) => {
-            console.error('onAuthStateChanged error', err);
-            go('login.html');
-          });
-        } catch (e) {
-          try { console.error('[redirect guard]', e); } catch {}
-          try { window.location.replace('login.html'); } catch {}
-        }
-      })
-      .catch((e)=>{ try { console.error('[redirect guard]', e); } catch {}; try { window.location.replace('login.html'); } catch {}; });
-  </script>
+<h1>Redirecting…</h1>
+<script type="module">
+import { auth } from './firebase.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+onAuthStateChanged(auth, (user) => {
+if (user) {
+window.location.replace('chat.html');
+} else {
+window.location.replace('login.html');
+}
+});
+// 後備：若 onAuthStateChanged 未觸發
+setTimeout(() => {
+const u = auth.currentUser;
+window.location.replace(u ? 'chat.html' : 'login.html');
+}, 2500);
+</script>
 </body>
 </html>

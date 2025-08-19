@@ -188,6 +188,10 @@ header {
   margin-left: 5px;
 }
 
+.toggle .blue { color:#00aaff; font-weight:bold; cursor:pointer }
+.toggle .blue:hover{ text-decoration:underline }
+.error{ color:red; margin-top:10px; text-align:center; font-size:14px }
+
 
 
 .popup {

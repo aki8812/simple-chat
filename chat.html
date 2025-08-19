@@ -1,86 +1,69 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="UTF-8" />
-  <title>簡單聊天室</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="icon" href="favicon.ico" />
-  <style>
-
-    .input-area button { min-width: 92px; }
-  </style>
-</head>
-<body>
-  <div class="chat-container">
-    <div id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></div>
-    <div class="input-area">
-      <input type="text" id="messageInput" placeholder="輸入訊息..." autocomplete="off" />
-      <button id="sendBtn" type="button">送出</button>
-    </div>
-  </div>
+return text.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
+return names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m;
+});
+}
 
 
-  <script type="module">
-    import { auth, db } from './firebase.js';
-    import { ref, push, onChildAdded } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
-    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+// ===== 更改暱稱（唯一） =====
+async function changeNickname() {
+if (!me) return;
+const newNick = (newNickEl.value || '').trim();
+if (newNick.length < 3 || newNick.length > 24) { return alert('暱稱需 3–24 字'); }
+const lower = newNick.toLowerCase();
+const oldLower = (myProfile?.nicknameLower || '').toLowerCase();
 
 
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-
-        window.location.href = 'login.html';
-      }
-    });
-
-
-    const messagesRef = ref(db, 'messages');
+try {
+// 先佔用新暱稱
+const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
+if (cur === null || cur === me.uid) return me.uid;
+return; // 已被占用
+});
+if (!res.committed) return alert('暱稱已被使用，請換一個');
 
 
-    const inputEl = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const messagesBox = document.getElementById('messages');
-
-    async function sendMessage() {
-      const text = (inputEl.value || '').trim();
-      if (!text) return;
-
-      const msg = {
-        text,
-        time: Date.now(),
-      };
-
-      try {
-        await push(messagesRef, msg);
-        inputEl.value = '';
-        inputEl.focus();
-      } catch (err) {
-        console.error('送出訊息失敗：', err);
-        alert('訊息傳送失敗，請稍後再試。');
-      }
-    }
+// 釋放舊暱稱（若是本人佔用）
+if (oldLower && lower !== oldLower) {
+await runTransaction(ref(db, `nicknames/${oldLower}`), (cur) => (cur === me.uid ? null : cur));
+}
 
 
-    inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-    sendBtn.addEventListener('click', sendMessage);
+await update(ref(db, `users/${me.uid}/profile`), { nickname: newNick, nicknameLower: lower });
+alert('已更新暱稱');
+} catch (e) {
+alert('更新失敗，稍後再試');
+}
+}
 
 
-    onChildAdded(messagesRef, (snapshot) => {
-      const message = snapshot.val();
-      const timeStr = new Date(message.time).toLocaleTimeString();
+// ===== 使用者名單與卡片 =====
+function renderUserList() {
+const arr = Array.from(users.entries()).map(([uid, p]) => ({ uid, ...p }));
+arr.sort((a,b) => a.nickname.localeCompare(b.nickname, 'zh-Hant'));
+userListEl.innerHTML = arr.map(u => `<div class="userrow" data-uid="${u.uid}">@${u.nickname}</div>`).join('');
+userListEl.querySelectorAll('.userrow').forEach((el) => el.addEventListener('click', () => openUserCard(el.dataset.uid)));
+}
 
-      const msgElement = document.createElement('div');
-      msgElement.className = 'chat-message';
-      msgElement.textContent = `[${timeStr}] ${message.text}`;
 
-      messagesBox.appendChild(msgElement);
-      messagesBox.scrollTop = messagesBox.scrollHeight;
-    });
-  </script>
+function openUserCard(uid) {
+const p = users.get(uid); if (!p) return;
+const isMe = me && uid === me.uid;
+const canBan = isAdmin && !isMe;
+userCard.innerHTML = `
+<div class="user-card">
+<div class="card-info">
+<div class="card-name">@${p.nickname}</div>
+<div class="card-registered">註冊時間：${new Date(p.registeredAt).toLocaleString()}</div>
+${canBan ? `<div style="margin-top:10px"><button id="banBtn" class="danger">封鎖此用戶</button></div>` : ''}
+<div style="margin-top:10px"><button id="closeCard">關閉</button></div>
+</div>
+</div>`;
+userCard.classList.remove('hidden');
+document.getElementById('closeCard').onclick = () => userCard.classList.add('hidden');
+const banBtn = document.getElementById('banBtn');
+if (banBtn) banBtn.onclick = async () => { if(confirm('確定封鎖此用戶？')) { await update(ref(db, `bans/${uid}`), true); alert('已封鎖'); userCard.classList.add('hidden'); } };
+}
+</script>
 </body>
 </html>
