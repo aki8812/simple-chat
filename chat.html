@@ -1,69 +1,284 @@
 <!DOCTYPE html>
-return text.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
-return names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m;
-});
-}
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>SimpleChat</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="favicon.ico" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">SimpleChat</div>
+      <div class="userlist" id="userList"></div>
+    </aside>
 
+    <main class="main">
+      <header class="topbar">
+        <div class="left">
+          <div id="verifyBanner" class="banner hidden">
+            尚未完成 Email 驗證，驗證前無法發話。
+            <button id="resendVerify" class="linklike">重新寄送驗證信</button>
+          </div>
+          <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
+        </div>
+        <div class="right">
+          <input id="newNickname" maxlength="24" placeholder="更改暱稱（3–24 字）" />
+          <button id="saveNickname">更新</button>
+          <button id="logout" class="danger">登出</button>
+        </div>
+      </header>
 
-// ===== 更改暱稱（唯一） =====
-async function changeNickname() {
-if (!me) return;
-const newNick = (newNickEl.value || '').trim();
-if (newNick.length < 3 || newNick.length > 24) { return alert('暱稱需 3–24 字'); }
-const lower = newNick.toLowerCase();
-const oldLower = (myProfile?.nicknameLower || '').toLowerCase();
+      <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
 
+      <div class="input-area">
+        <input type="text" id="messageInput" placeholder="輸入訊息...（可 @暱稱）" autocomplete="off" />
+        <button id="sendBtn" type="button">送出</button>
+      </div>
+    </main>
+  </div>
 
-try {
-// 先佔用新暱稱
-const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
-if (cur === null || cur === me.uid) return me.uid;
-return; // 已被占用
-});
-if (!res.committed) return alert('暱稱已被使用，請換一個');
+  <!-- 使用者卡片（點訊息中的暱稱打開） -->
+  <div id="userCard" class="popup hidden"></div>
 
+  <script type="module">
+    import { auth, db } from './firebase.js';
+    import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+    import { ref, push, onChildAdded, query, orderByChild, limitToLast, endAt, get, onValue, remove, update, runTransaction } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
-// 釋放舊暱稱（若是本人佔用）
-if (oldLower && lower !== oldLower) {
-await runTransaction(ref(db, `nicknames/${oldLower}`), (cur) => (cur === me.uid ? null : cur));
-}
+    const messagesRef = ref(db, 'messages');
+    const usersRef    = ref(db, 'users');
 
+    const messagesBox   = document.getElementById('messages');
+    const inputEl       = document.getElementById('messageInput');
+    const sendBtn       = document.getElementById('sendBtn');
+    const userListEl    = document.getElementById('userList');
+    const verifyBanner  = document.getElementById('verifyBanner');
+    const banBanner     = document.getElementById('banBanner');
+    const resendVerify  = document.getElementById('resendVerify');
+    const newNickEl     = document.getElementById('newNickname');
+    const saveNickBtn   = document.getElementById('saveNickname');
+    const logoutBtn     = document.getElementById('logout');
+    const userCard      = document.getElementById('userCard');
 
-await update(ref(db, `users/${me.uid}/profile`), { nickname: newNick, nicknameLower: lower });
-alert('已更新暱稱');
-} catch (e) {
-alert('更新失敗，稍後再試');
-}
-}
+    let me = null;            // Firebase User
+    let myProfile = null;     // { nickname, nicknameLower, registeredAt }
+    let isAdmin = false;
+    let isBanned = false;
 
+    const users = new Map();  // uid -> { nickname, nicknameLower, registeredAt }
 
-// ===== 使用者名單與卡片 =====
-function renderUserList() {
-const arr = Array.from(users.entries()).map(([uid, p]) => ({ uid, ...p }));
-arr.sort((a,b) => a.nickname.localeCompare(b.nickname, 'zh-Hant'));
-userListEl.innerHTML = arr.map(u => `<div class="userrow" data-uid="${u.uid}">@${u.nickname}</div>`).join('');
-userListEl.querySelectorAll('.userrow').forEach((el) => el.addEventListener('click', () => openUserCard(el.dataset.uid)));
-}
+    const PAGE = 25;
+    let oldestTime = Number.MAX_SAFE_INTEGER;
+    const loadedKeys = new Set();
 
+    // ===== Auth & 初始載入 =====
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) return (window.location.href = 'login.html');
+      me = user;
+      try { await reload(me); } catch {}
 
-function openUserCard(uid) {
-const p = users.get(uid); if (!p) return;
-const isMe = me && uid === me.uid;
-const canBan = isAdmin && !isMe;
-userCard.innerHTML = `
-<div class="user-card">
-<div class="card-info">
-<div class="card-name">@${p.nickname}</div>
-<div class="card-registered">註冊時間：${new Date(p.registeredAt).toLocaleString()}</div>
-${canBan ? `<div style="margin-top:10px"><button id="banBtn" class="danger">封鎖此用戶</button></div>` : ''}
-<div style="margin-top:10px"><button id="closeCard">關閉</button></div>
-</div>
-</div>`;
-userCard.classList.remove('hidden');
-document.getElementById('closeCard').onclick = () => userCard.classList.add('hidden');
-const banBtn = document.getElementById('banBtn');
-if (banBtn) banBtn.onclick = async () => { if(confirm('確定封鎖此用戶？')) { await update(ref(db, `bans/${uid}`), true); alert('已封鎖'); userCard.classList.add('hidden'); } };
-}
-</script>
+      // 我的角色
+      onValue(ref(db, `admins/${me.uid}`), (s) => { isAdmin = !!s.val(); refreshControls(); });
+      onValue(ref(db, `bans/${me.uid}`),   (s) => { isBanned = !!s.val(); refreshControls(); });
+
+      // 我的檔案（若不存在則建立）
+      onValue(ref(db, `users/${me.uid}/profile`), async (s) => {
+        if (!s.exists()) {
+          const nick = `User_${me.uid.slice(0,6)}`;
+          await update(ref(db, `users/${me.uid}`), {
+            profile: { nickname: nick, nicknameLower: nick.toLowerCase(), registeredAt: Date.now() },
+            private: { email: me.email || '' }
+          });
+        } else {
+          myProfile = s.val();
+          newNickEl.value = myProfile.nickname || '';
+        }
+      });
+
+      // 全使用者列表
+      onValue(usersRef, (snap) => {
+        users.clear();
+        snap.forEach((u) => {
+          const p = u.val()?.profile; if (p) users.set(u.key, p);
+        });
+        renderUserList();
+      });
+
+      // 初始訊息 25 筆
+      const baseQ = query(messagesRef, orderByChild('time'), limitToLast(PAGE));
+      onChildAdded(baseQ, (snap) => addMessage(snap.key, snap.val(), false));
+
+      // 上捲載更多
+      messagesBox.addEventListener('scroll', async () => {
+        if (messagesBox.scrollTop < 20) {
+          await loadMore();
+        }
+      });
+
+      // 控制項事件
+      sendBtn.addEventListener('click', sendMessage);
+      inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }});
+      logoutBtn.addEventListener('click', () => signOut(auth));
+      resendVerify.addEventListener('click', async () => { try { await sendEmailVerification(me); alert('已重新寄出驗證信。'); } catch(e) { alert('寄送失敗，稍後再試'); } });
+      saveNickBtn.addEventListener('click', changeNickname);
+
+      refreshControls();
+    });
+
+    function refreshControls() {
+      if (!me) return;
+      const verified = !!me.emailVerified;
+      verifyBanner.classList.toggle('hidden', verified);
+      banBanner.classList.toggle('hidden', !isBanned);
+      const disabled = !verified || isBanned;
+      inputEl.disabled = disabled; sendBtn.disabled = disabled;
+    }
+
+    // ===== 發送訊息 =====
+    async function sendMessage() {
+      if (!me) return;
+      if (!me.emailVerified) { alert('你尚未完成 Email 驗證，驗證後才可發話。'); return; }
+      if (isBanned) { alert('你已被封鎖，無法發話'); return; }
+
+      const text = (inputEl.value || '').trim();
+      if (!text) return;
+      const nick = myProfile?.nickname || '未知用戶';
+
+      try {
+        await push(messagesRef, { uid: me.uid, text, time: Date.now(), nickname: nick });
+        inputEl.value = '';
+      } catch (err) {
+        alert('訊息傳送失敗，請稍後再試。');
+      }
+    }
+
+    // ===== 讀取與渲染訊息 =====
+    function addMessage(key, msg, prepend) {
+      if (!msg || loadedKeys.has(key)) return;
+      loadedKeys.add(key);
+      oldestTime = Math.min(oldestTime, msg.time || Date.now());
+
+      const isSelf = me && msg.uid === me.uid;
+      const wrap = document.createElement('div');
+      wrap.className = `chat-message ${isSelf ? 'self' : 'other'}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+
+      const name = document.createElement('div');
+      name.className = 'bubble-name';
+      name.textContent = msg.nickname || users.get(msg.uid)?.nickname || '（已刪除用戶）';
+      name.addEventListener('click', () => openUserCard(msg.uid));
+
+      const content = document.createElement('div');
+      content.className = 'bubble-text';
+      content.innerHTML = renderWithMentions(msg.text);
+
+      const time = document.createElement('div');
+      time.className = 'bubble-time';
+      time.textContent = new Date(msg.time).toLocaleString();
+
+      const head = document.createElement('div');
+      head.className = 'bubble-head';
+      head.appendChild(name);
+
+      // 刪除鈕（作者或管理員）
+      if (me && (isSelf || isAdmin)) {
+        const del = document.createElement('button');
+        del.className = 'del-btn';
+        del.textContent = '刪除';
+        del.addEventListener('click', async () => {
+          if (!confirm('確定要刪除此訊息？')) return;
+          try { await remove(ref(db, `messages/${key}`)); } catch(e) { alert('刪除失敗'); }
+        });
+        head.appendChild(del);
+      }
+
+      bubble.appendChild(head);
+      bubble.appendChild(content);
+      bubble.appendChild(time);
+      wrap.appendChild(bubble);
+
+      if (prepend) {
+        messagesBox.insertBefore(wrap, messagesBox.firstChild);
+      } else {
+        messagesBox.appendChild(wrap);
+        messagesBox.scrollTop = messagesBox.scrollHeight;
+      }
+    }
+
+    async function loadMore() {
+      const moreQ = query(messagesRef, orderByChild('time'), endAt(oldestTime - 1), limitToLast(PAGE));
+      const snap = await get(moreQ);
+      const arr = [];
+      snap.forEach((child) => arr.push([child.key, child.val()]));
+      arr.forEach(([k, v]) => addMessage(k, v, true));
+    }
+
+    function renderWithMentions(text) {
+      if (!text) return '';
+      // 將 @暱稱 高亮（只對已存在的暱稱生效）
+      const names = new Set(Array.from(users.values()).map(u => u.nickname));
+      return text.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
+        return names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m;
+      });
+    }
+
+    // ===== 更改暱稱（唯一） =====
+    async function changeNickname() {
+      if (!me) return;
+      const newNick = (newNickEl.value || '').trim();
+      if (newNick.length < 3 || newNick.length > 24) { return alert('暱稱需 3–24 字'); }
+      const lower = newNick.toLowerCase();
+      const oldLower = (myProfile?.nicknameLower || '').toLowerCase();
+
+      try {
+        // 先佔用新暱稱
+        const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
+          if (cur === null || cur === me.uid) return me.uid;
+          return; // 已被占用
+        });
+        if (!res.committed) return alert('暱稱已被使用，請換一個');
+
+        // 釋放舊暱稱（若是本人佔用）
+        if (oldLower && lower !== oldLower) {
+          await runTransaction(ref(db, `nicknames/${oldLower}`), (cur) => (cur === me.uid ? null : cur));
+        }
+
+        await update(ref(db, `users/${me.uid}/profile`), { nickname: newNick, nicknameLower: lower });
+        alert('已更新暱稱');
+      } catch (e) {
+        alert('更新失敗，稍後再試');
+      }
+    }
+
+    // ===== 使用者名單與卡片 =====
+    function renderUserList() {
+      const arr = Array.from(users.entries()).map(([uid, p]) => ({ uid, ...p }));
+      arr.sort((a,b) => a.nickname.localeCompare(b.nickname, 'zh-Hant'));
+      userListEl.innerHTML = arr.map(u => `<div class="userrow" data-uid="${u.uid}">@${u.nickname}</div>`).join('');
+      userListEl.querySelectorAll('.userrow').forEach((el) => el.addEventListener('click', () => openUserCard(el.dataset.uid)));
+    }
+
+    function openUserCard(uid) {
+      const p = users.get(uid); if (!p) return;
+      const isMe = me && uid === me.uid;
+      const canBan = isAdmin && !isMe;
+      userCard.innerHTML = `
+        <div class="user-card">
+          <div class="card-info">
+            <div class="card-name">@${p.nickname}</div>
+            <div class="card-registered">註冊時間：${new Date(p.registeredAt).toLocaleString()}</div>
+            ${canBan ? `<div style="margin-top:10px"><button id="banBtn" class="danger">封鎖此用戶</button></div>` : ''}
+            <div style="margin-top:10px"><button id="closeCard">關閉</button></div>
+          </div>
+        </div>`;
+      userCard.classList.remove('hidden');
+      document.getElementById('closeCard').onclick = () => userCard.classList.add('hidden');
+      const banBtn = document.getElementById('banBtn');
+      if (banBtn) banBtn.onclick = async () => { if(confirm('確定封鎖此用戶？')) { await update(ref(db, `bans/${uid}`), true); alert('已封鎖'); userCard.classList.add('hidden'); } };
+    }
+  </script>
 </body>
 </html>

@@ -1,58 +1,147 @@
 <!DOCTYPE html>
-const existed = await get(ref(db, `nicknames/${lower}`));
-if (existed.exists()) { errorMsg.textContent = '暱稱已被使用，請換一個'; return; }
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>登入 / 註冊 - SimpleChat</title>
+  <link rel="stylesheet" href="style2.css" />
+  <link rel="icon" href="favicon.ico" />
+</head>
+<body>
+  <div class="container">
+    <h2 id="formTitle">登入 SimpleChat</h2>
 
+    <input type="email" id="email" placeholder="電子郵件" />
 
-const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
-const uid = cred.user.uid;
+    <div class="password-wrapper">
+      <input type="password" id="password" placeholder="密碼" />
+      <span id="togglePassword" title="顯示/隱藏密碼">👁️</span>
+    </div>
 
+    <input type="text" id="nickname" placeholder="暱稱（3–24 字；註冊時填寫）" style="display:none" />
 
-// 以交易方式佔用暱稱（防競態）
-const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
-if (cur === null) return uid; // 佔用成功
-return; // 中止交易
-});
-if (!res.committed) { throw new Error('暱稱已被使用，請換一個'); }
+    <button id="submitBtn">登入</button>
 
+    <div class="toggle" id="toggleForm">沒有或已有帳號？<span class="blue">點此註冊 / 登入</span></div>
+    <div class="toggle" style="margin-top:8px"><span class="blue" id="forgot">忘記密碼？點此重設</span></div>
 
-await set(ref(db, `users/${uid}/profile`), {
-nickname: nick,
-nicknameLower: lower,
-registeredAt: Date.now()
-});
-await set(ref(db, `users/${uid}/private`), { email: emailVal });
+    <div id="infoMsg" class="info" style="text-align:center; margin-top:8px; color:#9ad">註冊後會寄出驗證信；未驗證前可以登入，但無法發話。</div>
+    <div id="errorMsg" class="error"></div>
+  </div>
 
+  <script type="module">
+    import { auth, db } from './firebase.js';
+    import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+    import { ref, set, runTransaction, get } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
-// 寄送驗證信（登入後即可去聊天室，但未驗證無法發話）
-await sendEmailVerification(cred.user);
-}
-window.location.href = 'chat.html';
-} catch (err) {
-errorMsg.textContent = mapAuthErrorToZh(err);
-}
-}
+    const email = document.getElementById('email');
+    const password = document.getElementById('password');
+    const nickname = document.getElementById('nickname');
+    const submitBtn = document.getElementById('submitBtn');
+    const toggleForm = document.getElementById('toggleForm');
+    const formTitle = document.getElementById('formTitle');
+    const errorMsg = document.getElementById('errorMsg');
+    const infoMsg = document.getElementById('infoMsg');
+    const togglePassword = document.getElementById('togglePassword');
+    const forgot = document.getElementById('forgot');
 
+    let isLogin = true;
 
-;[email, password, nickname].forEach((el) => {
-el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
-});
+    togglePassword.style.cursor = 'pointer';
+    togglePassword.addEventListener('click', () => {
+      password.type = password.type === 'password' ? 'text' : 'password';
+    });
 
+    toggleForm.addEventListener('click', () => {
+      isLogin = !isLogin;
+      formTitle.textContent = isLogin ? '登入 SimpleChat' : '註冊 SimpleChat';
+      submitBtn.textContent = isLogin ? '登入' : '註冊';
+      nickname.style.display = isLogin ? 'none' : 'block';
+      errorMsg.textContent = '';
+    });
 
-onAuthStateChanged(auth, (u) => { if (u) window.location.href = 'chat.html'; });
+    forgot.addEventListener('click', async () => {
+      errorMsg.textContent = '';
+      const emailVal = (email.value || '').trim();
+      if (!emailVal) { errorMsg.textContent = '請先輸入電子郵件再按重設'; return; }
+      try {
+        await sendPasswordResetEmail(auth, emailVal);
+        infoMsg.textContent = '重設密碼連結已寄出，請查收郵件。';
+      } catch (err) {
+        errorMsg.textContent = mapAuthErrorToZh(err);
+      }
+    });
 
+    submitBtn.addEventListener('click', handleSubmit);
 
-function mapAuthErrorToZh(error) {
-const code = error?.code || '';
-switch (code) {
-case 'auth/invalid-email': return '電子郵件格式不正確';
-case 'auth/email-already-in-use': return '此信箱已被註冊';
-case 'auth/user-not-found': return '帳號不存在';
-case 'auth/wrong-password': return '密碼錯誤';
-case 'auth/weak-password': return '密碼需至少 6 碼';
-case 'auth/network-request-failed': return '網路異常，請檢查連線';
-default: return `發生錯誤：${error?.message || String(error)}`;
-}
-}
-</script>
+    async function handleSubmit() {
+      errorMsg.textContent = '';
+      const emailVal = (email.value || '').trim();
+      const pwdVal = (password.value || '').trim();
+
+      if (!emailVal || !pwdVal || (!isLogin && !(nickname.value || '').trim())) {
+        errorMsg.textContent = '請完整填寫所有欄位';
+        return;
+      }
+
+      try {
+        if (isLogin) {
+          await signInWithEmailAndPassword(auth, emailVal, pwdVal);
+        } else {
+          const nick = (nickname.value || '').trim();
+          if (nick.length < 3 || nick.length > 24) {
+            errorMsg.textContent = '暱稱需 3–24 字';
+            return;
+          }
+          const lower = nick.toLowerCase();
+
+          // 先檢查是否已被使用（減少明顯衝突）
+          const existed = await get(ref(db, `nicknames/${lower}`));
+          if (existed.exists()) { errorMsg.textContent = '暱稱已被使用，請換一個'; return; }
+
+          const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
+          const uid = cred.user.uid;
+
+          // 以交易方式佔用暱稱（防競態）
+          const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
+            if (cur === null) return uid; // 佔用成功
+            return; // 中止交易
+          });
+          if (!res.committed) { throw new Error('暱稱已被使用，請換一個'); }
+
+          await set(ref(db, `users/${uid}/profile`), {
+            nickname: nick,
+            nicknameLower: lower,
+            registeredAt: Date.now()
+          });
+          await set(ref(db, `users/${uid}/private`), { email: emailVal });
+
+          // 寄送驗證信（登入後即可去聊天室，但未驗證無法發話）
+          await sendEmailVerification(cred.user);
+        }
+        window.location.href = 'chat.html';
+      } catch (err) {
+        errorMsg.textContent = mapAuthErrorToZh(err);
+      }
+    }
+
+    ;[email, password, nickname].forEach((el) => {
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
+    });
+
+    onAuthStateChanged(auth, (u) => { if (u) window.location.href = 'chat.html'; });
+
+    function mapAuthErrorToZh(error) {
+      const code = error?.code || '';
+      switch (code) {
+        case 'auth/invalid-email': return '電子郵件格式不正確';
+        case 'auth/email-already-in-use': return '此信箱已被註冊';
+        case 'auth/user-not-found': return '帳號不存在';
+        case 'auth/wrong-password': return '密碼錯誤';
+        case 'auth/weak-password': return '密碼需至少 6 碼';
+        case 'auth/network-request-failed': return '網路異常，請檢查連線';
+        default: return `發生錯誤：${error?.message || String(error)}`;
+      }
+    }
+  </script>
 </body>
 </html>
