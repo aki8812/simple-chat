@@ -1,235 +1,135 @@
-body {
-  background-color: #2c2f33;
-  font-family: 'Segoe UI', sans-serif;
-  margin: 0;
-  padding: 0;
-  color: white;
+/* ========== Login / Register Only (SimpleChat) ========== */
+:root {
+  --bg: #2c2f33;
+  --panel: #23272a;
+  --input: #1e2124;
+  --text: #ffffff;
+  --muted: #9aa7bd;
+  --brand: #7289da;
+  --brand-hover: #5b6eae;
+  --danger: #e02e2e;
+  --border: #3a3f45;
 }
 
-.container, .chat-container {
-  max-width: 400px;
-  margin: 60px auto;
-  background-color: #23272a;
-  padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 0 10px #000;
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: radial-gradient(1000px 600px at 10% -10%, #2f3340 0%, var(--bg) 60%),
+              radial-gradient(800px 500px at 90% 110%, #2b2f3a 0%, var(--bg) 60%);
+  font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, -apple-system, sans-serif;
 }
+
+/* ===== Container ===== */
+.container {
+  width: 100%;
+  max-width: 420px;
+  margin: 10vh auto;
+  background: var(--panel);
+  padding: 28px;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.35);
+  border: 1px solid var(--border);
+  animation: fadeIn .25s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px)} to { opacity: 1; transform: translateY(0)} }
 
 h2 {
+  margin: 0 0 10px;
   text-align: center;
+  letter-spacing: .5px;
 }
 
-input[type="text"],
+/* ===== Inputs & Buttons ===== */
 input[type="email"],
 input[type="password"],
-input[type="file"] {
+input[type="text"] {
   width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  margin-bottom: 15px;
-  border: none;
-  border-radius: 4px;
-  box-sizing: border-box;
+  padding: 12px 12px;
+  margin: 10px 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input);
+  color: var(--text);
+  outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease;
 }
-
-input[type="file"] {
-  background-color: transparent;
-  color: white;
+input::placeholder { color: #9aa0a6; }
+input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(114,137,218,.25);
 }
 
 button {
   width: 100%;
-  padding: 10px;
-  background-color: #7289da;
-  color: white;
-  border: none;
-  border-radius: 4px;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: .3px;
   cursor: pointer;
-  font-weight: bold;
-  margin-top: 10px;
+  transition: background .18s ease, transform .02s ease;
 }
+button:hover { background: var(--brand-hover); }
+button:active { transform: translateY(1px); }
+button.danger { background: var(--danger); }
 
-button:hover {
-  background-color: #5b6eae;
-}
-
-.toggle {
-  text-align: center;
-  margin-top: 15px;
-  font-size: 14px;
-}
-
-.toggle .blue {
-  color: #00aaff;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.error {
-  color: red;
-  margin-top: 10px;
-  text-align: center;
-  font-size: 14px;
-}
-
-.password-wrapper {
-  position: relative;
-}
-
+/* ===== Password eye icon ===== */
+.password-wrapper { position: relative; }
 #togglePassword {
   position: absolute;
   right: 10px;
-  top: 12px;
-  cursor: pointer;
-}
-
-/* Chat UI */
-
-.chat-box {
-  height: 400px;
-  overflow-y: auto;
-  background-color: #2c2f33;
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-
-.chat-message {
-  display: flex;
-  align-items: flex-end;
-  margin-bottom: 12px;
-  position: relative;
-}
-
-.chat-message.self {
-  flex-direction: row-reverse;
-}
-
-.chat-message .avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  margin: 0 10px;
-  cursor: pointer;
-}
-
-.bubble {
-  background-color: #5865f2;
-  padding: 10px 14px;
-  border-radius: 10px;
-  max-width: 70%;
-  position: relative;
-  word-break: break-word;
-}
-
-.chat-message.other .bubble {
-  background-color: #4f545c;
-}
-
-.chat-message.self .bubble::after {
-  content: "";
-  position: absolute;
-  right: -8px;
-  top: 10px;
-  border: 8px solid transparent;
-  border-left-color: #5865f2;
-}
-
-.chat-message.other .bubble::after {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 10px;
-  border: 8px solid transparent;
-  border-right-color: #4f545c;
-}
-
-.bubble-time {
-  font-size: 12px;
-  color: #ccc;
-  margin-top: 5px;
-  text-align: right;
-}
-
-.input-area {
-  display: flex;
-  gap: 5px;
-  margin-top: 10px;
-}
-
-.input-area input[type="text"] {
-  flex: 1;
-}
-
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-#logout {
-  background-color: red;
-  color: white;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  border: none;
-}
-
-.del-btn {
-  background-color: #ff5555;
-  color: white;
-  border: none;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  margin-left: 5px;
-}
-
-.toggle .blue { color:#00aaff; font-weight:bold; cursor:pointer }
-.toggle .blue:hover{ text-decoration:underline }
-.error{ color:red; margin-top:10px; text-align:center; font-size:14px }
-
-
-.popup {
-  position: fixed;
   top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: #2c2f33;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 0 10px black;
-  z-index: 1000;
+  transform: translateY(-50%);
+  user-select: none;
+  cursor: pointer;
+  opacity: .85;
 }
+#togglePassword:hover { opacity: 1; }
 
-.user-card {
-  display: flex;
-  align-items: center;
-}
-
-.card-avatar {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  margin-right: 15px;
-}
-
-.card-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.card-name {
-  font-size: 18px;
-  font-weight: bold;
-}
-
-.card-registered,
-.card-history {
+/* ===== Helper texts ===== */
+.error {
+  color: #ff6b6b;
+  margin-top: 8px;
+  text-align: center;
   font-size: 14px;
-  margin-top: 5px;
-  color: #ccc;
+  min-height: 18px; /* 保留高度避免版面跳動 */
+}
+.info {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* ===== Switch links / small actions ===== */
+.toggle {
+  text-align: center;
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.toggle .blue {
+  color: #00aaff;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.toggle .blue:hover { text-decoration: underline; }
+
+/* 鍵盤可及性 */
+a, .blue, button, #togglePassword {
+  outline: none;
+}
+a:focus, .blue:focus, button:focus, #togglePassword:focus {
+  box-shadow: 0 0 0 3px rgba(114,137,218,.35);
+  border-radius: 6px;
+}
+
+/* ===== Small screen ===== */
+@media (max-width: 460px) {
+  .container { margin: 6vh 14px; padding: 22px; }
 }
