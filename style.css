@@ -1,7 +1,7 @@
 /* 版面與主色系 */
 :root { --bg:#2c2f33; --bg2:#23272a; --panel:#36393f; --brand:#5865f2; --brand2:#4f545c; --text:#fff; --muted:#ccc; }
 *{box-sizing:border-box}
-html,body{height:100%}
+html,body{height:100%; overflow:hidden} /* ⬅ 固定版面高度，不讓整站上下捲動 */
 body { margin:0; background-color:var(--bg); font-family:'Segoe UI', "Microsoft JhengHei", sans-serif; color:var(--text); }
 
 .app { display:grid; grid-template-columns:240px 1fr; height:100vh; }
@@ -9,8 +9,9 @@ body { margin:0; background-color:var(--bg); font-family:'Segoe UI', "Microsoft 
 .sidebar .brand { font-weight:700; margin-bottom:8px; opacity:.9; }
 .userrow{padding:6px 8px; border-radius:6px; cursor:pointer}
 .userrow:hover{background:#2b2f33}
+.userrow.admin{ color:#ffd54a; font-weight:700; } /* ⬅ 管理員高亮（亮黃色） */
 
-.main { display:grid; grid-template-rows:auto 1fr auto; }
+.main { display:grid; grid-template-rows:auto 1fr auto; height:100vh; }
 .topbar { display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #1f2225; background:var(--bg2); gap:8px; }
 .topbar .right{display:flex; gap:6px; align-items:center}
 .topbar input{background:#1e2124; border:1px solid #444; color:#fff; padding:6px 8px; border-radius:6px}
@@ -44,8 +45,7 @@ button.danger:hover{background:#c22626}
 /* 使用者卡片 */
 .popup { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg2); border-radius:10px; padding:18px; box-shadow:0 0 12px #000; z-index:1000; min-width:260px }
 
-/* 響應式 */
+/* 響應式（手機抽屜效果移除，保持桌機版固定排版） */
 @media (max-width: 820px) {
-  .app{ grid-template-columns: 1fr; }
-  .sidebar{ grid-row:3; height:30vh }
+  .app{ grid-template-columns: 240px 1fr; } /* 保持側欄存在，不做抽屜 */
 }

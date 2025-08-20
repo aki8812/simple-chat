@@ -16,11 +16,9 @@
     <main class="main">
       <header class="topbar">
         <div class="left">
-          <!-- 抽屜按鈕從 banner 裡移出到這裡，永遠可見 -->
-          <button id="toggleUsers" title="顯示/隱藏使用者列表">👥</button>
-
+          <!-- 移除抽屜按鈕：#toggleUsers 已刪除 -->
           <div id="verifyBanner" class="banner hidden">
-            尚未完成 Email 驗證，驗證前無法發話。請查收您的郵件。若未收到請查看您的垃圾郵件。或者 - - >
+            尚未完成 Email 驗證，驗證前無法發話。
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
@@ -51,6 +49,7 @@
 
     const messagesRef = ref(db, 'messages');
     const usersRef    = ref(db, 'users');
+    const adminsRef   = ref(db, 'admins');
 
     const messagesBox   = document.getElementById('messages');
     const inputEl       = document.getElementById('messageInput');
@@ -63,17 +62,16 @@
     const saveNickBtn   = document.getElementById('saveNickname');
     const logoutBtn     = document.getElementById('logout');
     const userCard      = document.getElementById('userCard');
-    const sidebarEl     = document.querySelector('.sidebar');
-    const toggleUsersBtn= document.getElementById('toggleUsers');
 
     let me = null;
     let myProfile = null;
     let isAdmin = false;
     let isBanned = false;
 
-    const users = new Map();  // uid -> { nickname, nicknameLower, registeredAt }
+    const users = new Map();      // uid -> { nickname, nicknameLower, registeredAt }
+    const adminsSet = new Set();  // uid in admins
 
-    const PAGE = 25;
+    const PAGE = 25;               // 一次載入 25 筆
     let oldestTime = Number.MAX_SAFE_INTEGER;
     const loadedKeys = new Set();
 
@@ -87,14 +85,26 @@
       onValue(ref(db, `admins/${me.uid}`), (s) => { isAdmin = !!s.val(); refreshControls(); });
       onValue(ref(db, `bans/${me.uid}`),   (s) => { isBanned = !!s.val(); refreshControls(); });
 
-      // 我的檔案（**不再自動寫入預設暱稱，避免覆蓋註冊暱稱**）
+      // **管理員清單**（用於側欄高亮）
+      onValue(adminsRef, (snap) => {
+        adminsSet.clear();
+        snap.forEach(ch => adminsSet.add(ch.key));
+        renderUserList(); // 重新渲染以套用高亮
+      });
+
+      // 我的檔案 —— 不再寫入任何預設，以免覆蓋註冊暱稱
       onValue(ref(db, `users/${me.uid}/profile`), (s) => {
         if (!s.exists()) {
-          // 若真的遇到舊帳號沒有 profile，可以在 UI 顯示提示，但此處不主動寫入，避免覆蓋
+          // 如果極少數情況真的不存在，就先禁用輸入避免送出「未知用戶」，
+          // 等待使用者資料寫入完成（通常是註冊流程寫入）
+          myProfile = null;
+          newNickEl.value = '';
+          refreshControls();
           return;
         }
         myProfile = s.val();
         newNickEl.value = myProfile.nickname || '';
+        refreshControls();
       });
 
       // 全使用者列表
@@ -106,11 +116,11 @@
         renderUserList();
       });
 
-      // 初始訊息
+      // 初始訊息 25 筆
       const baseQ = query(messagesRef, orderByChild('time'), limitToLast(PAGE));
       onChildAdded(baseQ, (snap) => addMessage(snap.key, snap.val(), false));
 
-      // 上捲載更多
+      // 上捲載更多（每次再取 25 筆）
       messagesBox.addEventListener('scroll', async () => {
         if (messagesBox.scrollTop < 20) {
           await loadMore();
@@ -124,21 +134,17 @@
       resendVerify.addEventListener('click', async () => { try { await sendEmailVerification(me); alert('已重新寄出驗證信。'); } catch(e) { alert('寄送失敗，稍後再試'); } });
       saveNickBtn.addEventListener('click', changeNickname);
 
-      // 抽屜切換
-      toggleUsersBtn.addEventListener('click', () => {
-        sidebarEl.classList.toggle('hidden');
-      });
-
       refreshControls();
     });
 
     function refreshControls() {
       if (!me) return;
       const verified = !!me.emailVerified;
+      const disabled = !verified || isBanned || !myProfile; // 沒有載到 profile 前暫時禁用發話
       verifyBanner.classList.toggle('hidden', verified);
       banBanner.classList.toggle('hidden', !isBanned);
-      const disabled = !verified || isBanned;
-      inputEl.disabled = disabled; sendBtn.disabled = disabled;
+      inputEl.disabled = disabled; 
+      sendBtn.disabled = disabled;
     }
 
     // ===== 發送訊息 =====
@@ -146,10 +152,11 @@
       if (!me) return;
       if (!me.emailVerified) { alert('你尚未完成 Email 驗證，驗證後才可發話。'); return; }
       if (isBanned) { alert('你已被封鎖，無法發話'); return; }
+      if (!myProfile?.nickname) { alert('正在載入個人資料，請稍候再試'); return; }
 
       const text = (inputEl.value || '').trim();
       if (!text) return;
-      const nick = myProfile?.nickname || '未知用戶';
+      const nick = myProfile.nickname;
 
       try {
         await push(messagesRef, { uid: me.uid, text, time: Date.now(), nickname: nick });
@@ -276,7 +283,10 @@
     function renderUserList() {
       const arr = Array.from(users.entries()).map(([uid, p]) => ({ uid, ...p }));
       arr.sort((a,b) => a.nickname.localeCompare(b.nickname, 'zh-Hant'));
-      userListEl.innerHTML = arr.map(u => `<div class="userrow" data-uid="${u.uid}">@${u.nickname}</div>`).join('');
+      userListEl.innerHTML = arr.map(u => {
+        const adminClass = adminsSet.has(u.uid) ? ' admin' : '';
+        return `<div class="userrow${adminClass}" data-uid="${u.uid}">@${u.nickname}</div>`;
+      }).join('');
       userListEl.querySelectorAll('.userrow').forEach((el) => el.addEventListener('click', () => openUserCard(el.dataset.uid)));
     }
 
@@ -287,7 +297,7 @@
       userCard.innerHTML = `
         <div class="user-card">
           <div class="card-info">
-            <div class="card-name">@${p.nickname}</div>
+            <div class="card-name">@${p.nickname} ${adminsSet.has(uid) ? '<span style="font-size:12px;opacity:.9">(管理員)</span>' : ''}</div>
             <div class="card-registered">註冊時間：${new Date(p.registeredAt).toLocaleString()}</div>
             ${canBan ? `<div style="margin-top:10px"><button id="banBtn" class="danger">封鎖此用戶</button></div>` : ''}
             <div style="margin-top:10px"><button id="closeCard">關閉</button></div>
