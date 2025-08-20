@@ -16,8 +16,9 @@
     <main class="main">
       <header class="topbar">
         <div class="left">
+          <!-- 移除抽屜按鈕：#toggleUsers 已刪除 -->
           <div id="verifyBanner" class="banner hidden">
-            尚未完成 Email 驗證，驗證前無法發話。
+            尚未完成 Email 驗證，驗證前無法發話。請查收您的郵件。若未收到請查看您的垃圾郵件。或者 - - >
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
@@ -44,12 +45,11 @@
   <script type="module">
     import { auth, db } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, push, onChildAdded, query, orderByChild, limitToLast, endAt, get, onValue, remove, update, runTransaction, set } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref, push, onChildAdded, query, orderByChild, limitToLast, endAt, get, onValue, remove, update, runTransaction } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     const messagesRef = ref(db, 'messages');
     const usersRef    = ref(db, 'users');
     const adminsRef   = ref(db, 'admins');
-    const bansRef     = ref(db, 'bans');
 
     const messagesBox   = document.getElementById('messages');
     const inputEl       = document.getElementById('messageInput');
@@ -68,21 +68,12 @@
     let isAdmin = false;
     let isBanned = false;
 
-    const users = new Map();           // uid -> { nickname, nicknameLower, registeredAt }
-    const adminsSet = new Set();       // uid in admins
-    const bansSet   = new Set();       // uid in bans（僅管理員可見）
+    const users = new Map();      // uid -> { nickname, nicknameLower, registeredAt }
+    const adminsSet = new Set();  // uid in admins
 
-    const PAGE = 25;
+    const PAGE = 25;               // 一次載入 25 筆
     let oldestTime = Number.MAX_SAFE_INTEGER;
     const loadedKeys = new Set();
-
-    // 格式化時間（避免 Invalid Date）
-    function fmt(ts) {
-      if (typeof ts === 'number' && isFinite(ts)) return new Date(ts).toLocaleString();
-      const n = Number(ts);
-      if (isFinite(n)) return new Date(n).toLocaleString();
-      return '—';
-    }
 
     // ===== Auth & 初始載入 =====
     onAuthStateChanged(auth, async (user) => {
@@ -91,35 +82,27 @@
       try { await reload(me); } catch {}
 
       // 角色監聽
-      onValue(ref(db, `admins/${me.uid}`), (s) => { 
-        const prev = isAdmin;
-        isAdmin = !!s.val(); 
-        refreshControls(); 
-        // 成為管理員後才可讀 bans
-        if (isAdmin && !prev) subscribeBans();
-      });
+      onValue(ref(db, `admins/${me.uid}`), (s) => { isAdmin = !!s.val(); refreshControls(); });
       onValue(ref(db, `bans/${me.uid}`),   (s) => { isBanned = !!s.val(); refreshControls(); });
 
-      // 管理員清單（側欄高亮）
+      // **管理員清單**（用於側欄高亮）
       onValue(adminsRef, (snap) => {
         adminsSet.clear();
         snap.forEach(ch => adminsSet.add(ch.key));
-        renderUserList();
+        renderUserList(); // 重新渲染以套用高亮
       });
 
-      // 我的檔案 —— 不主動寫入預設暱稱；若缺 registeredAt 只補那個欄位
-      onValue(ref(db, `users/${me.uid}/profile`), async (s) => {
+      // 我的檔案 —— 不再寫入任何預設，以免覆蓋註冊暱稱
+      onValue(ref(db, `users/${me.uid}/profile`), (s) => {
         if (!s.exists()) {
+          // 如果極少數情況真的不存在，就先禁用輸入避免送出「未知用戶」，
+          // 等待使用者資料寫入完成（通常是註冊流程寫入）
           myProfile = null;
           newNickEl.value = '';
           refreshControls();
           return;
         }
         myProfile = s.val();
-        if (myProfile && (myProfile.registeredAt === undefined || myProfile.registeredAt === null)) {
-          // 只補註冊時間，不更動暱稱
-          try { await update(ref(db, `users/${me.uid}/profile`), { registeredAt: Date.now() }); } catch {}
-        }
         newNickEl.value = myProfile.nickname || '';
         refreshControls();
       });
@@ -137,7 +120,7 @@
       const baseQ = query(messagesRef, orderByChild('time'), limitToLast(PAGE));
       onChildAdded(baseQ, (snap) => addMessage(snap.key, snap.val(), false));
 
-      // 上捲載更多
+      // 上捲載更多（每次再取 25 筆）
       messagesBox.addEventListener('scroll', async () => {
         if (messagesBox.scrollTop < 20) {
           await loadMore();
@@ -152,25 +135,16 @@
       saveNickBtn.addEventListener('click', changeNickname);
 
       refreshControls();
-      if (isAdmin) subscribeBans();
     });
-
-    function subscribeBans() {
-      onValue(bansRef, (snap) => {
-        bansSet.clear();
-        snap.forEach(ch => bansSet.add(ch.key));
-        renderUserList();
-      });
-    }
 
     function refreshControls() {
       if (!me) return;
       const verified = !!me.emailVerified;
+      const disabled = !verified || isBanned || !myProfile; // 沒有載到 profile 前暫時禁用發話
       verifyBanner.classList.toggle('hidden', verified);
       banBanner.classList.toggle('hidden', !isBanned);
-      const disabled = !verified || isBanned || !myProfile;
       inputEl.disabled = disabled; 
-      sendBtn.disabled  = disabled;
+      sendBtn.disabled = disabled;
     }
 
     // ===== 發送訊息 =====
@@ -187,7 +161,7 @@
       try {
         await push(messagesRef, { uid: me.uid, text, time: Date.now(), nickname: nick });
         inputEl.value = '';
-      } catch {
+      } catch (err) {
         alert('訊息傳送失敗，請稍後再試。');
       }
     }
@@ -216,7 +190,7 @@
 
       const time = document.createElement('div');
       time.className = 'bubble-time';
-      time.textContent = fmt(msg.time);
+      time.textContent = new Date(msg.time).toLocaleString();
 
       const head = document.createElement('div');
       head.className = 'bubble-head';
@@ -262,11 +236,14 @@
       });
     }
 
-    // ===== 更改暱稱（唯一） =====
+    // ===== 更改暱稱（唯一，修正版） =====
     async function changeNickname() {
       if (!me) return;
       const newNick = (newNickEl.value || '').trim();
-      if (newNick.length < 3 || newNick.length > 24) { alert('暱稱需 3–24 字'); return; }
+      if (newNick.length < 3 || newNick.length > 24) {
+        alert('暱稱需 3–24 字');
+        return;
+      }
       const lower = newNick.toLowerCase();
       const oldLower = (myProfile?.nicknameLower || '').toLowerCase();
 
@@ -276,18 +253,30 @@
           if (cur === null || cur === me.uid) return me.uid;
           return;
         });
-        if (!res.committed) { alert('暱稱已被使用，請換一個'); return; }
+        if (!res.committed) {
+          alert('暱稱已被使用，請換一個');
+          return;
+        }
 
         // 2. 更新 profile
-        await update(ref(db, `users/${me.uid}/profile`), { nickname: newNick, nicknameLower: lower });
+        await update(ref(db, `users/${me.uid}/profile`), {
+          nickname: newNick,
+          nicknameLower: lower
+        });
 
         // 3. 釋放舊暱稱
         if (oldLower && lower !== oldLower) {
-          await runTransaction(ref(db, `nicknames/${oldLower}`), (cur) => (cur === me.uid ? null : cur));
+          await runTransaction(ref(db, `nicknames/${oldLower}`), (cur) => {
+            if (cur === me.uid) return null;
+            return cur;
+          });
         }
 
         alert('已更新暱稱');
-      } catch (e) { console.error(e); alert('更新失敗，稍後再試'); }
+      } catch (e) {
+        console.error(e);
+        alert('更新失敗，稍後再試');
+      }
     }
 
     // ===== 使用者名單與卡片 =====
@@ -295,17 +284,8 @@
       const arr = Array.from(users.entries()).map(([uid, p]) => ({ uid, ...p }));
       arr.sort((a,b) => a.nickname.localeCompare(b.nickname, 'zh-Hant'));
       userListEl.innerHTML = arr.map(u => {
-        const isMe = me && u.uid === me.uid;
-        const isAdm = adminsSet.has(u.uid);
-        const isBan = bansSet.has(u.uid); // 只有管理員看得到 bansSet
-        const classes = [
-          'userrow',
-          isMe ? 'me' : '',
-          isAdm ? 'admin' : '',
-          (isBan && isAdmin) ? 'banned' : '' // 非管理員看不到被封鎖標示
-        ].filter(Boolean).join(' ');
-        const label = isAdm ? ' <span class="tag-admin">[管理員]</span>' : '';
-        return `<div class="${classes}" data-uid="${u.uid}">@${u.nickname}${label}</div>`;
+        const adminClass = adminsSet.has(u.uid) ? ' admin' : '';
+        return `<div class="userrow${adminClass}" data-uid="${u.uid}">@${u.nickname}</div>`;
       }).join('');
       userListEl.querySelectorAll('.userrow').forEach((el) => el.addEventListener('click', () => openUserCard(el.dataset.uid)));
     }
@@ -317,8 +297,8 @@
       userCard.innerHTML = `
         <div class="user-card">
           <div class="card-info">
-            <div class="card-name">@${p.nickname} ${adminsSet.has(uid) ? '<span style="font-size:12px;opacity:.9">[管理員]</span>' : ''}</div>
-            <div class="card-registered">註冊時間：${fmt(p.registeredAt)}</div>
+            <div class="card-name">@${p.nickname} ${adminsSet.has(uid) ? '<span style="font-size:12px;opacity:.9">(管理員)</span>' : ''}</div>
+            <div class="card-registered">註冊時間：${new Date(p.registeredAt).toLocaleString()}</div>
             ${canBan ? `<div style="margin-top:10px"><button id="banBtn" class="danger">封鎖此用戶</button></div>` : ''}
             <div style="margin-top:10px"><button id="closeCard">關閉</button></div>
           </div>
@@ -326,11 +306,7 @@
       userCard.classList.remove('hidden');
       document.getElementById('closeCard').onclick = () => userCard.classList.add('hidden');
       const banBtn = document.getElementById('banBtn');
-      if (banBtn) banBtn.onclick = async () => {
-        if (!confirm('確定封鎖此用戶？')) return;
-        try { await set(ref(db, `bans/${uid}`), true); alert('已封鎖'); userCard.classList.add('hidden'); }
-        catch { alert('封鎖失敗'); }
-      };
+      if (banBtn) banBtn.onclick = async () => { if(confirm('確定封鎖此用戶？')) { await update(ref(db, `bans/${uid}`), true); alert('已封鎖'); userCard.classList.add('hidden'); } };
     }
   </script>
 </body>
