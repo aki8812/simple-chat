@@ -30,7 +30,13 @@
 
   <script type="module">
     import { auth, db } from './firebase.js';
-    import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+    import { 
+      onAuthStateChanged, 
+      signInWithEmailAndPassword, 
+      createUserWithEmailAndPassword, 
+      sendEmailVerification, 
+      sendPasswordResetEmail 
+    } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
     import { ref, set, runTransaction, get } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     const email = document.getElementById('email');
@@ -73,62 +79,61 @@
 
     submitBtn.addEventListener('click', handleSubmit);
 
-async function handleSubmit() {
-  errorMsg.textContent = '';
-  const emailVal = (email.value || '').trim();
-  const pwdVal = (password.value || '').trim();
+    async function handleSubmit() {
+      errorMsg.textContent = '';
+      const emailVal = (email.value || '').trim();
+      const pwdVal = (password.value || '').trim();
 
-  if (!emailVal || !pwdVal || (!isLogin && !(nickname.value || '').trim())) {
-    errorMsg.textContent = '請完整填寫所有欄位';
-    return;
-  }
-
-  try {
-    if (isLogin) {
-      await signInWithEmailAndPassword(auth, emailVal, pwdVal);
-    } else {
-      const nick = (nickname.value || '').trim();
-      if (nick.length < 3 || nick.length > 24) {
-        errorMsg.textContent = '暱稱需 3–24 字';
+      if (!emailVal || !pwdVal || (!isLogin && !(nickname.value || '').trim())) {
+        errorMsg.textContent = '請完整填寫所有欄位';
         return;
       }
-      const lower = nick.toLowerCase();
 
-      // 檢查暱稱是否存在
-      const existed = await get(ref(db, `nicknames/${lower}`));
-      if (existed.exists()) { errorMsg.textContent = '暱稱已被使用，請換一個'; return; }
+      try {
+        if (isLogin) {
+          await signInWithEmailAndPassword(auth, emailVal, pwdVal);
+        } else {
+          const nick = (nickname.value || '').trim();
+          if (nick.length < 3 || nick.length > 24) {
+            errorMsg.textContent = '暱稱需 3–24 字';
+            return;
+          }
+          const lower = nick.toLowerCase();
 
-      // 建立帳號（這裡會自動登入）
-      const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
-      const uid = cred.user.uid;
+          // 檢查暱稱是否已存在
+          const existed = await get(ref(db, `nicknames/${lower}`));
+          if (existed.exists()) { errorMsg.textContent = '暱稱已被使用，請換一個'; return; }
 
-      // 確保已登入，再寫入 DB（避免 rules auth.uid 為空）
-      await signInWithEmailAndPassword(auth, emailVal, pwdVal);
+          // 建立帳號
+          const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
+          const uid = cred.user.uid;
 
-      // 以交易方式佔用暱稱
-      const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
-        if (cur === null || cur === uid) return uid;
-        return; // 中止交易
-      });
-      if (!res.committed) { throw new Error('暱稱已被使用，請換一個'); }
+          // 確保 rules 能認出 auth.uid → 再登入一次
+          await signInWithEmailAndPassword(auth, emailVal, pwdVal);
 
-      // 建立使用者資料
-      await set(ref(db, `users/${uid}/profile`), {
-        nickname: nick,
-        nicknameLower: lower,
-        registeredAt: Date.now()
-      });
-      await set(ref(db, `users/${uid}/private`), { email: emailVal });
+          // 以交易方式佔用暱稱
+          const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
+            if (cur === null || cur === uid) return uid;
+            return;
+          });
+          if (!res.committed) { throw new Error('暱稱已被使用，請換一個'); }
 
-      // 寄送驗證信
-      await sendEmailVerification(cred.user);
+          // 建立使用者資料
+          await set(ref(db, `users/${uid}/profile`), {
+            nickname: nick,
+            nicknameLower: lower,
+            registeredAt: Date.now()
+          });
+          await set(ref(db, `users/${uid}/private`), { email: emailVal });
+
+          // 寄送驗證信
+          await sendEmailVerification(cred.user);
+        }
+        window.location.href = 'chat.html';
+      } catch (err) {
+        errorMsg.textContent = mapAuthErrorToZh(err);
+      }
     }
-    window.location.href = 'chat.html';
-  } catch (err) {
-    errorMsg.textContent = mapAuthErrorToZh(err);
-  }
-}
-
 
     ;[email, password, nickname].forEach((el) => {
       el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
