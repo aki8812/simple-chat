@@ -16,10 +16,12 @@
     <main class="main">
       <header class="topbar">
         <div class="left">
+          <!-- 抽屜按鈕從 banner 裡移出到這裡，永遠可見 -->
+          <button id="toggleUsers" title="顯示/隱藏使用者列表">👥</button>
+
           <div id="verifyBanner" class="banner hidden">
             尚未完成 Email 驗證，驗證前無法發話。
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
-            <button id="toggleUsers">👥</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
         </div>
@@ -61,6 +63,8 @@
     const saveNickBtn   = document.getElementById('saveNickname');
     const logoutBtn     = document.getElementById('logout');
     const userCard      = document.getElementById('userCard');
+    const sidebarEl     = document.querySelector('.sidebar');
+    const toggleUsersBtn= document.getElementById('toggleUsers');
 
     let me = null;
     let myProfile = null;
@@ -83,18 +87,14 @@
       onValue(ref(db, `admins/${me.uid}`), (s) => { isAdmin = !!s.val(); refreshControls(); });
       onValue(ref(db, `bans/${me.uid}`),   (s) => { isBanned = !!s.val(); refreshControls(); });
 
-      // 我的檔案
-      onValue(ref(db, `users/${me.uid}/profile`), async (s) => {
+      // 我的檔案（**不再自動寫入預設暱稱，避免覆蓋註冊暱稱**）
+      onValue(ref(db, `users/${me.uid}/profile`), (s) => {
         if (!s.exists()) {
-          const nick = `User_${me.uid.slice(0,6)}`;
-          await update(ref(db, `users/${me.uid}`), {
-            profile: { nickname: nick, nicknameLower: nick.toLowerCase(), registeredAt: Date.now() },
-            private: { email: me.email || '' }
-          });
-        } else {
-          myProfile = s.val();
-          newNickEl.value = myProfile.nickname || '';
+          // 若真的遇到舊帳號沒有 profile，可以在 UI 顯示提示，但此處不主動寫入，避免覆蓋
+          return;
         }
+        myProfile = s.val();
+        newNickEl.value = myProfile.nickname || '';
       });
 
       // 全使用者列表
@@ -123,6 +123,11 @@
       logoutBtn.addEventListener('click', () => signOut(auth));
       resendVerify.addEventListener('click', async () => { try { await sendEmailVerification(me); alert('已重新寄出驗證信。'); } catch(e) { alert('寄送失敗，稍後再試'); } });
       saveNickBtn.addEventListener('click', changeNickname);
+
+      // 抽屜切換
+      toggleUsersBtn.addEventListener('click', () => {
+        sidebarEl.classList.toggle('hidden');
+      });
 
       refreshControls();
     });
