@@ -13,7 +13,7 @@
     <input type="email" id="email" placeholder="電子郵件" />
 
     <div class="password-wrapper">
-      <input type="password" id="password" placeholder="密碼" />
+      <input type="password" id="password" placeholder="密碼(至少6碼)" />
       <span id="togglePassword" title="顯示/隱藏密碼">👁️</span>
     </div>
 
@@ -65,7 +65,7 @@
       if (!emailVal) { errorMsg.textContent = '請先輸入電子郵件再按重設'; return; }
       try {
         await sendPasswordResetEmail(auth, emailVal);
-        infoMsg.textContent = '重設密碼連結已寄出，請查收郵件。';
+        infoMsg.textContent = '重設密碼連結已寄出，請查收郵件(可能位於垃圾郵件中)。';
       } catch (err) {
         errorMsg.textContent = mapAuthErrorToZh(err);
       }
@@ -73,56 +73,62 @@
 
     submitBtn.addEventListener('click', handleSubmit);
 
-    async function handleSubmit() {
-      errorMsg.textContent = '';
-      const emailVal = (email.value || '').trim();
-      const pwdVal = (password.value || '').trim();
+async function handleSubmit() {
+  errorMsg.textContent = '';
+  const emailVal = (email.value || '').trim();
+  const pwdVal = (password.value || '').trim();
 
-      if (!emailVal || !pwdVal || (!isLogin && !(nickname.value || '').trim())) {
-        errorMsg.textContent = '請完整填寫所有欄位';
+  if (!emailVal || !pwdVal || (!isLogin && !(nickname.value || '').trim())) {
+    errorMsg.textContent = '請完整填寫所有欄位';
+    return;
+  }
+
+  try {
+    if (isLogin) {
+      await signInWithEmailAndPassword(auth, emailVal, pwdVal);
+    } else {
+      const nick = (nickname.value || '').trim();
+      if (nick.length < 3 || nick.length > 24) {
+        errorMsg.textContent = '暱稱需 3–24 字';
         return;
       }
+      const lower = nick.toLowerCase();
 
-      try {
-        if (isLogin) {
-          await signInWithEmailAndPassword(auth, emailVal, pwdVal);
-        } else {
-          const nick = (nickname.value || '').trim();
-          if (nick.length < 3 || nick.length > 24) {
-            errorMsg.textContent = '暱稱需 3–24 字';
-            return;
-          }
-          const lower = nick.toLowerCase();
+      // 檢查暱稱是否存在
+      const existed = await get(ref(db, `nicknames/${lower}`));
+      if (existed.exists()) { errorMsg.textContent = '暱稱已被使用，請換一個'; return; }
 
-          // 先檢查是否已被使用（減少明顯衝突）
-          const existed = await get(ref(db, `nicknames/${lower}`));
-          if (existed.exists()) { errorMsg.textContent = '暱稱已被使用，請換一個'; return; }
+      // 建立帳號（這裡會自動登入）
+      const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
+      const uid = cred.user.uid;
 
-          const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
-          const uid = cred.user.uid;
+      // 確保已登入，再寫入 DB（避免 rules auth.uid 為空）
+      await signInWithEmailAndPassword(auth, emailVal, pwdVal);
 
-          // 以交易方式佔用暱稱（防競態）
-          const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
-            if (cur === null) return uid; // 佔用成功
-            return; // 中止交易
-          });
-          if (!res.committed) { throw new Error('暱稱已被使用，請換一個'); }
+      // 以交易方式佔用暱稱
+      const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
+        if (cur === null || cur === uid) return uid;
+        return; // 中止交易
+      });
+      if (!res.committed) { throw new Error('暱稱已被使用，請換一個'); }
 
-          await set(ref(db, `users/${uid}/profile`), {
-            nickname: nick,
-            nicknameLower: lower,
-            registeredAt: Date.now()
-          });
-          await set(ref(db, `users/${uid}/private`), { email: emailVal });
+      // 建立使用者資料
+      await set(ref(db, `users/${uid}/profile`), {
+        nickname: nick,
+        nicknameLower: lower,
+        registeredAt: Date.now()
+      });
+      await set(ref(db, `users/${uid}/private`), { email: emailVal });
 
-          // 寄送驗證信（登入後即可去聊天室，但未驗證無法發話）
-          await sendEmailVerification(cred.user);
-        }
-        window.location.href = 'chat.html';
-      } catch (err) {
-        errorMsg.textContent = mapAuthErrorToZh(err);
-      }
+      // 寄送驗證信
+      await sendEmailVerification(cred.user);
     }
+    window.location.href = 'chat.html';
+  } catch (err) {
+    errorMsg.textContent = mapAuthErrorToZh(err);
+  }
+}
+
 
     ;[email, password, nickname].forEach((el) => {
       el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
@@ -139,6 +145,7 @@
         case 'auth/wrong-password': return '密碼錯誤';
         case 'auth/weak-password': return '密碼需至少 6 碼';
         case 'auth/network-request-failed': return '網路異常，請檢查連線';
+        case 'auth/invalid-login-credentials': return '帳號或密碼錯誤';
         default: return `發生錯誤：${error?.message || String(error)}`;
       }
     }
