@@ -71,7 +71,7 @@
       if (!emailVal) { errorMsg.textContent = '請先輸入電子郵件再按重設'; return; }
       try {
         await sendPasswordResetEmail(auth, emailVal);
-        infoMsg.textContent = '重設密碼連結已寄出，請查收郵件(可能位於垃圾郵件中)。';
+        infoMsg.textContent = '重設密碼連結已寄出，請查收郵件。若未收到請查看您的垃圾郵件。';
       } catch (err) {
         errorMsg.textContent = mapAuthErrorToZh(err);
       }
