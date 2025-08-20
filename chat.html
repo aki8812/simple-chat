@@ -19,6 +19,7 @@
           <div id="verifyBanner" class="banner hidden">
             尚未完成 Email 驗證，驗證前無法發話。
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
+            <button id="toggleUsers">👥</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
         </div>
@@ -38,7 +39,7 @@
     </main>
   </div>
 
-  <!-- 使用者卡片（點訊息中的暱稱打開） -->
+  <!-- 使用者卡片 -->
   <div id="userCard" class="popup hidden"></div>
 
   <script type="module">
@@ -61,8 +62,8 @@
     const logoutBtn     = document.getElementById('logout');
     const userCard      = document.getElementById('userCard');
 
-    let me = null;            // Firebase User
-    let myProfile = null;     // { nickname, nicknameLower, registeredAt }
+    let me = null;
+    let myProfile = null;
     let isAdmin = false;
     let isBanned = false;
 
@@ -78,11 +79,11 @@
       me = user;
       try { await reload(me); } catch {}
 
-      // 我的角色
+      // 角色監聽
       onValue(ref(db, `admins/${me.uid}`), (s) => { isAdmin = !!s.val(); refreshControls(); });
       onValue(ref(db, `bans/${me.uid}`),   (s) => { isBanned = !!s.val(); refreshControls(); });
 
-      // 我的檔案（若不存在則建立）
+      // 我的檔案
       onValue(ref(db, `users/${me.uid}/profile`), async (s) => {
         if (!s.exists()) {
           const nick = `User_${me.uid.slice(0,6)}`;
@@ -105,7 +106,7 @@
         renderUserList();
       });
 
-      // 初始訊息 25 筆
+      // 初始訊息
       const baseQ = query(messagesRef, orderByChild('time'), limitToLast(PAGE));
       onChildAdded(baseQ, (snap) => addMessage(snap.key, snap.val(), false));
 
@@ -183,7 +184,6 @@
       head.className = 'bubble-head';
       head.appendChild(name);
 
-      // 刪除鈕（作者或管理員）
       if (me && (isSelf || isAdmin)) {
         const del = document.createElement('button');
         del.className = 'del-btn';
@@ -218,37 +218,51 @@
 
     function renderWithMentions(text) {
       if (!text) return '';
-      // 將 @暱稱 高亮（只對已存在的暱稱生效）
       const names = new Set(Array.from(users.values()).map(u => u.nickname));
       return text.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
         return names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m;
       });
     }
 
-    // ===== 更改暱稱（唯一） =====
+    // ===== 更改暱稱（唯一，修正版） =====
     async function changeNickname() {
       if (!me) return;
       const newNick = (newNickEl.value || '').trim();
-      if (newNick.length < 3 || newNick.length > 24) { return alert('暱稱需 3–24 字'); }
+      if (newNick.length < 3 || newNick.length > 24) {
+        alert('暱稱需 3–24 字');
+        return;
+      }
       const lower = newNick.toLowerCase();
       const oldLower = (myProfile?.nicknameLower || '').toLowerCase();
 
       try {
-        // 先佔用新暱稱
+        // 1. 佔用新暱稱
         const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
           if (cur === null || cur === me.uid) return me.uid;
-          return; // 已被占用
+          return;
         });
-        if (!res.committed) return alert('暱稱已被使用，請換一個');
-
-        // 釋放舊暱稱（若是本人佔用）
-        if (oldLower && lower !== oldLower) {
-          await runTransaction(ref(db, `nicknames/${oldLower}`), (cur) => (cur === me.uid ? null : cur));
+        if (!res.committed) {
+          alert('暱稱已被使用，請換一個');
+          return;
         }
 
-        await update(ref(db, `users/${me.uid}/profile`), { nickname: newNick, nicknameLower: lower });
+        // 2. 更新 profile
+        await update(ref(db, `users/${me.uid}/profile`), {
+          nickname: newNick,
+          nicknameLower: lower
+        });
+
+        // 3. 釋放舊暱稱
+        if (oldLower && lower !== oldLower) {
+          await runTransaction(ref(db, `nicknames/${oldLower}`), (cur) => {
+            if (cur === me.uid) return null;
+            return cur;
+          });
+        }
+
         alert('已更新暱稱');
       } catch (e) {
+        console.error(e);
         alert('更新失敗，稍後再試');
       }
     }
