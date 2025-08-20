@@ -30,14 +30,14 @@
 
   <script type="module">
     import { auth, db } from './firebase.js';
-    import { 
-      onAuthStateChanged, 
-      signInWithEmailAndPassword, 
-      createUserWithEmailAndPassword, 
-      sendEmailVerification, 
-      sendPasswordResetEmail 
+    import {
+      onAuthStateChanged,
+      signInWithEmailAndPassword,
+      createUserWithEmailAndPassword,
+      sendEmailVerification,
+      sendPasswordResetEmail
     } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, set, runTransaction, get } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref, set, runTransaction } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     const email = document.getElementById('email');
     const password = document.getElementById('password');
@@ -100,25 +100,20 @@
           }
           const lower = nick.toLowerCase();
 
-          // 檢查暱稱是否已存在
-          const existed = await get(ref(db, `nicknames/${lower}`));
-          if (existed.exists()) { errorMsg.textContent = '暱稱已被使用，請換一個'; return; }
-
-          // 建立帳號
+          // 1) 建立帳號（這一步會讓使用者成為已登入狀態）
           const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
           const uid = cred.user.uid;
 
-          // 確保 rules 能認出 auth.uid → 再登入一次
-          await signInWithEmailAndPassword(auth, emailVal, pwdVal);
-
-          // 以交易方式佔用暱稱
+          // 2) 直接用 transaction 佔用暱稱（不再做註冊前的 get 檢查）
           const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
             if (cur === null || cur === uid) return uid;
-            return;
+            return; // 暱稱被佔用 → 讓 committed = false
           });
-          if (!res.committed) { throw new Error('暱稱已被使用，請換一個'); }
+          if (!res.committed) {
+            throw new Error('暱稱已被使用，請換一個');
+          }
 
-          // 建立使用者資料
+          // 3) 建立使用者資料
           await set(ref(db, `users/${uid}/profile`), {
             nickname: nick,
             nicknameLower: lower,
@@ -126,7 +121,7 @@
           });
           await set(ref(db, `users/${uid}/private`), { email: emailVal });
 
-          // 寄送驗證信
+          // 4) 寄送驗證信（可選）
           await sendEmailVerification(cred.user);
         }
         window.location.href = 'chat.html';
@@ -139,6 +134,7 @@
       el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
     });
 
+    // 仍保留：已登入者直接進聊天室
     onAuthStateChanged(auth, (u) => { if (u) window.location.href = 'chat.html'; });
 
     function mapAuthErrorToZh(error) {
@@ -150,7 +146,6 @@
         case 'auth/wrong-password': return '密碼錯誤';
         case 'auth/weak-password': return '密碼需至少 6 碼';
         case 'auth/network-request-failed': return '網路異常，請檢查連線';
-        case 'auth/invalid-login-credentials': return '帳號或密碼錯誤';
         default: return `發生錯誤：${error?.message || String(error)}`;
       }
     }
