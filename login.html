@@ -31,7 +31,6 @@
   </div>
 
 <script type="module">
-  // ===== 模組載入 =====
   import { auth, db } from './firebase.js';
   import {
     onAuthStateChanged,
@@ -42,7 +41,6 @@
   } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
   import { ref, set, runTransaction } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
-  // ===== DOM =====
   const email       = document.getElementById('email');
   const password    = document.getElementById('password');
   const nickname    = document.getElementById('nickname');
@@ -56,24 +54,18 @@
 
   let isLogin = true;
 
-  console.log('[INIT] login.html loaded');
-
-  // 顯示/隱藏密碼
   togglePwd.addEventListener('click', () => {
     password.type = password.type === 'password' ? 'text' : 'password';
   });
 
-  // 切換登入/註冊模式
   toggleForm.addEventListener('click', () => {
     isLogin = !isLogin;
     formTitle.textContent = isLogin ? '登入 SimpleChat' : '註冊 SimpleChat';
     submitBtn.textContent = isLogin ? '登入' : '註冊';
     nickname.style.display = isLogin ? 'none' : 'block';
     errorMsg.textContent = '';
-    console.log('[UI] mode =', isLogin ? 'login' : 'register');
   });
 
-  // 忘記密碼
   forgot.addEventListener('click', async () => {
     errorMsg.textContent = '';
     const emailVal = (email.value || '').trim();
@@ -86,9 +78,8 @@
     }
   });
 
-  // 送出
   submitBtn.addEventListener('click', handleSubmit);
-  ;[email, password, nickname].forEach((el) => {
+  [email, password, nickname].forEach((el) => {
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
   });
 
@@ -107,9 +98,8 @@
 
     try {
       if (isLogin) {
-        console.log('[STEP] LOGIN start');
         await signInWithEmailAndPassword(auth, emailVal, pwdVal);
-        console.log('[STEP] LOGIN done');
+        window.location.href = 'chat.html';
       } else {
         if (nick.length < 3 || nick.length > 24) {
           errorMsg.textContent = '暱稱需 3–24 字';
@@ -117,14 +107,10 @@
         }
         const lower = nick.toLowerCase();
 
-        // 1) 建立帳號（自動登入）
-        console.log('[STEP] REGISTER create user');
         const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
         const uid  = cred.user.uid;
-        console.log('[STEP] REGISTER created uid =', uid);
 
-        // 2) 嘗試佔用暱稱（唯一）
-        console.log('[STEP] REGISTER transaction nicknames/', lower);
+        // 暱稱唯一檢查
         const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
           if (cur === null || cur === uid) return uid;
           return;
@@ -132,44 +118,34 @@
         if (!res.committed) {
           throw new Error('暱稱已被使用，請換一個');
         }
-        console.log('[STEP] REGISTER nickname reserved');
 
-        // 3) 建立使用者資料（必定寫入 DB）
-        console.log('[STEP] REGISTER write users profile/private');
+        // 建立使用者資料
         await set(ref(db, `users/${uid}/profile`), {
           nickname: nick,
           nicknameLower: lower,
           registeredAt: Date.now()
         });
         await set(ref(db, `users/${uid}/private`), { email: emailVal });
-        console.log('[STEP] REGISTER users written');
 
-        // 4) 寄送驗證信（顯示結果，不阻擋流程）
+        // 暫存暱稱，避免聊天室第一次讀不到
+        localStorage.setItem('pendingNickname', nick);
+
+        // 驗證信
         try {
-          console.log('[STEP] REGISTER send verification email');
           await sendEmailVerification(cred.user);
           alert('驗證信已寄出，請到信箱收信（可能在垃圾郵件）');
-          console.log('[STEP] REGISTER email sent');
-        } catch (e) {
-          console.warn('[WARN] verification email failed', e);
+        } catch {
           alert('驗證信寄送失敗，可在聊天室右上角再寄一次');
         }
 
-        // 5) （可選）讓聊天室先顯示暱稱
-        localStorage.setItem('pendingNickname', nick);
+        // ✅ 這裡才 redirect，保證 DB 已寫入
+        window.location.href = 'chat.html';
       }
-
-      console.log('[STEP] redirect -> chat.html');
-      window.location.href = 'chat.html';
     } catch (err) {
-      console.error('[ERROR]', err);
       errorMsg.textContent = mapAuthErrorToZh(err);
       submitBtn.disabled = false;
     }
   }
-
-  // 已登入者直接跳轉（注意：這行放最後，避免干擾註冊寫入流程）
-  onAuthStateChanged(auth, (u) => { if (u) { console.log('[AUTH] logged in, redirect'); window.location.href = 'chat.html'; } });
 
   function mapAuthErrorToZh(error) {
     const code = error?.code || '';
