@@ -133,3 +133,64 @@ a:focus, .blue:focus, button:focus, #togglePassword:focus {
 @media (max-width: 460px) {
   .container { margin: 6vh 14px; padding: 22px; }
 }
+
+/* === Scrollbar Theme (Discord-like) ===
+   作用範圍：.sidebar（使用者列表）與 .chat-box（訊息區）
+   只調整滾輪外觀與捲動手感，不影響其他樣式
+---------------------------------------------------------------- */
+
+/* WebKit 系列（Chrome / Edge / Safari） */
+.sidebar::-webkit-scrollbar,
+.chat-box::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.sidebar:hover::-webkit-scrollbar,
+.chat-box:hover::-webkit-scrollbar {
+  width: 12px;  /* 滑過時微加寬，抓取更容易 */
+  height: 12px;
+}
+.sidebar::-webkit-scrollbar-track,
+.chat-box::-webkit-scrollbar-track {
+  background: #1c1f22;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+}
+.sidebar::-webkit-scrollbar-thumb,
+.chat-box::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3b4050, #2f3344);
+  border-radius: 10px;
+  border: 2px solid transparent;    /* 與 track 之間留縫，視覺更精緻 */
+  background-clip: padding-box;
+}
+.sidebar:hover::-webkit-scrollbar-thumb,
+.chat-box:hover::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #596080, #3a3f5a);
+}
+.sidebar::-webkit-scrollbar-thumb:active,
+.chat-box::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #6b73a0, #4a5180);
+}
+/* 角落交會區塊 */
+.sidebar::-webkit-scrollbar-corner,
+.chat-box::-webkit-scrollbar-corner {
+  background: #1c1f22;
+}
+
+/* Firefox */
+.sidebar,
+.chat-box {
+  scrollbar-width: thin; /* 細滾輪 */
+  scrollbar-color: #3b4050 #1c1f22; /* thumb 顏色 / track 顏色 */
+}
+.sidebar:hover,
+.chat-box:hover {
+  scrollbar-color: #596080 #1c1f22;
+}
+
+/* 捲動手感微調（僅限 .chat-box，不影響排版結構） */
+.chat-box {
+  scrollbar-gutter: stable;   /* 避免顯示/隱藏滾輪時內容跳動 */
+  overscroll-behavior: contain; /* 防止內層捲動牽動整頁 */
+  scroll-behavior: smooth;    /* 平滑捲動 */
+}
