@@ -1,0 +1,31 @@
+:root { --bg:#2c2f33; --bg2:#23272a; --panel:#36393f; --brand:#5865f2; --brand2:#4f545c; --text:#fff; --muted:#ccc; }
+*{box-sizing:border-box}
+html,body{height:100%; margin:0; background:var(--bg); color:var(--text); font-family:'Segoe UI', "Microsoft JhengHei", sans-serif;}
+
+.app-admin { display:flex; flex-direction:column; height:100vh; }
+@supports (height: 100dvh) { .app-admin{ height:100dvh; } }
+
+.topbar{ display:flex; align-items:center; gap:12px; padding:12px; background:var(--bg2); border-bottom:1px solid #1f2225; }
+.topbar .brand{ cursor:pointer; font-weight:700; }
+.topbar .title{ font-weight:700; opacity:.95 }
+
+.list-box{ flex:1; overflow:auto; padding:12px; background:var(--bg); display:flex; flex-direction:column; gap:8px; }
+
+.section-title{ color:#9aa7bd; font-weight:700; margin:10px 0 4px; }
+.empty{ color:#9aa7bd; font-style:italic; padding:6px 8px; background:#2f3338; border-radius:6px; }
+
+.member-row{ background:var(--panel); border:1px solid #1f2225; border-radius:8px; padding:10px 12px; }
+.member-row.admin .name{ color:#ffd54a; font-weight:700; }
+.member-row.banned .name{ color:#b71c1c; }
+.tag-admin{ font-size:12px; opacity:.9; margin-left:6px; }
+
+.member-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.member-head .name{ font-weight:700; }
+.member-head .toggle{ background:#7289da; color:#fff; border:0; border-radius:6px; padding:4px 8px; cursor:pointer; }
+.member-head .toggle:hover{ background:#5b6eae; }
+
+.member-body{ margin-top:8px; background:#2f3338; border-radius:6px; padding:10px; }
+.hidden{ display:none; }
+
+button.danger{ background:#e02e2e; color:#fff; border:0; border-radius:6px; padding:6px 10px; cursor:pointer; }
+button.danger:hover{ background:#c22626; }

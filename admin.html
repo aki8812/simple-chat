@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SimpleChat Admin</title>
+  <link rel="stylesheet" href="style3.css" />
+  <link rel="icon" href="favicon.ico" />
+</head>
+<body>
+  <div class="app-admin">
+    <header class="topbar">
+      <div class="brand" id="toChat">← 返回聊天室</div>
+      <div class="title">成員管理</div>
+    </header>
+
+    <section id="listBox" class="list-box" aria-live="polite"></section>
+  </div>
+
+  <script type="module">
+    import { auth, db } from './firebase.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+    import { ref, onValue, get, set, remove } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+
+    const listBox = document.getElementById('listBox');
+    document.getElementById('toChat').onclick = () => (location.href = 'chat.html');
+
+    let me = null;
+    const users = new Map();     // uid -> profile
+    const adminsSet = new Set(); // uid
+    const bansSet   = new Set(); // uid
+
+    const PAGE = 25;
+    let normalSorted = [];
+    let normalRendered = 0;
+
+    onAuthStateChanged(auth, async (u) => {
+      if (!u) return (location.href = 'login.html');
+      me = u;
+
+      // 僅限管理員
+      onValue(ref(db, `admins/${me.uid}`), (s) => {
+        if (!s.val()) { alert('你沒有權限'); location.href = 'chat.html'; }
+      });
+
+      // 訂閱三大集合
+      onValue(ref(db, 'admins'), (snap) => { adminsSet.clear(); snap.forEach(ch => adminsSet.add(ch.key)); rebuild(); });
+      onValue(ref(db, 'bans'),   (snap) => { bansSet.clear();   snap.forEach(ch => bansSet.add(ch.key));   rebuild(); });
+      onValue(ref(db, 'users'),  (snap) => {
+        users.clear();
+        snap.forEach(u => { const p=u.val()?.profile; if (p) users.set(u.key, p); });
+        rebuild();
+      });
+
+      listBox.addEventListener('scroll', () => {
+        if (listBox.scrollTop + listBox.clientHeight >= listBox.scrollHeight - 20) {
+          renderMore();
+        }
+      });
+    });
+
+    function rebuild() {
+      // 分組排序
+      const admins = [], banned = [], normal = [];
+      users.forEach((p, uid) => {
+        const rec = { uid, ...p };
+        if (adminsSet.has(uid)) admins.push(rec);
+        else if (bansSet.has(uid)) banned.push(rec);
+        else normal.push(rec);
+      });
+      const cmp = (a,b)=>a.nickname.localeCompare(b.nickname,'zh-Hant');
+      admins.sort(cmp); banned.sort(cmp); normal.sort(cmp);
+
+      normalSorted = normal;
+      normalRendered = 0;
+
+      // 先渲染管理員與封鎖者全量，普通成員前 25
+      listBox.innerHTML = sectionHtml('---管理員---', admins, true) +
+                          sectionHtml('---封鎖成員---', banned, true) +
+                          `<div class="section-title">---普通成員---</div><div id="normalList"></div>`;
+      renderMore(); // 普通成員前 25
+
+      // 綁定展開＆按鈕事件
+      bindRowEvents(listBox);
+    }
+
+    function sectionHtml(title, arr, full) {
+      const rows = arr.map(rowHtml).join('') || '<div class="empty">（無）</div>';
+      return `<div class="section-title">${title}</div>${rows}`;
+    }
+
+    function rowHtml(u) {
+      const isAdm = adminsSet.has(u.uid);
+      const isBan = bansSet.has(u.uid);
+      const cls = ['member-row', isAdm?'admin':'', isBan?'banned':''].filter(Boolean).join(' ');
+      return `
+        <div class="${cls}" data-uid="${u.uid}">
+          <div class="member-head">
+            <span class="name">${u.nickname}</span>
+            ${isAdm ? '<span class="tag-admin">[管理員]</span>' : ''}
+            <button class="toggle">▼</button>
+          </div>
+          <div class="member-body hidden">
+            <div>電子郵件：<span class="email" data-uid="${u.uid}">（點上方▼載入）</span></div>
+            <div>註冊時間：${fmt(u.registeredAt)}</div>
+            <div style="margin-top:8px">
+              ${isAdm ? '' : `<button class="${isBan?'':'danger'} ban-btn">${isBan?'解封鎖':'封鎖'}</button>`}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderMore() {
+      const list = document.getElementById('normalList');
+      if (!list) return;
+      const next = normalSorted.slice(normalRendered, normalRendered + PAGE);
+      if (next.length === 0) return;
+      list.insertAdjacentHTML('beforeend', next.map(rowHtml).join(''));
+      normalRendered += next.length;
+      bindRowEvents(list);
+    }
+
+    function bindRowEvents(root) {
+      root.querySelectorAll('.member-row .toggle').forEach(btn => {
+        btn.onclick = async (e) => {
+          const row = e.currentTarget.closest('.member-row');
+          const body = row.querySelector('.member-body');
+          body.classList.toggle('hidden');
+          if (!body.classList.contains('hidden')) {
+            // 載入 email
+            const uid = row.dataset.uid;
+            const el = row.querySelector('.email');
+            try {
+              const snap = await get(ref(db, `users/${uid}/private/email`));
+              el.textContent = snap.exists() ? snap.val() : '（無）';
+            } catch { el.textContent = '（讀取失敗）'; }
+          }
+        };
+      });
+      root.querySelectorAll('.member-row .ban-btn').forEach(btn => {
+        btn.onclick = async (e) => {
+          const row = e.currentTarget.closest('.member-row');
+          const uid = row.dataset.uid;
+          const isBan = bansSet.has(uid);
+          if (!confirm(isBan ? '確定要解封？' : '確定要封鎖？')) return;
+          try {
+            if (isBan) await remove(ref(db, `bans/${uid}`));
+            else await set(ref(db, `bans/${uid}`), true);
+            alert(isBan ? '已解封' : '已封鎖');
+          } catch { alert('操作失敗'); }
+        };
+      });
+    }
+
+    function fmt(ts) {
+      if (typeof ts === 'number' && isFinite(ts)) return new Date(ts).toLocaleString();
+      const n = Number(ts);
+      if (isFinite(n)) return new Date(n).toLocaleString();
+      return '—';
+    }
+  </script>
+</body>
+</html>
