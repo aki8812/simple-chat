@@ -41,6 +41,7 @@
   } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
   import { ref, set, runTransaction } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
+  // ===== DOM =====
   const email       = document.getElementById('email');
   const password    = document.getElementById('password');
   const nickname    = document.getElementById('nickname');
@@ -53,11 +54,14 @@
   const forgot      = document.getElementById('forgot');
 
   let isLogin = true;
+  const REDIRECT_GUARD_KEY = 'signupInProgress';
 
+  // 顯示/隱藏密碼
   togglePwd.addEventListener('click', () => {
     password.type = password.type === 'password' ? 'text' : 'password';
   });
 
+  // 切換登入/註冊模式
   toggleForm.addEventListener('click', () => {
     isLogin = !isLogin;
     formTitle.textContent = isLogin ? '登入 SimpleChat' : '註冊 SimpleChat';
@@ -66,6 +70,7 @@
     errorMsg.textContent = '';
   });
 
+  // 忘記密碼
   forgot.addEventListener('click', async () => {
     errorMsg.textContent = '';
     const emailVal = (email.value || '').trim();
@@ -78,6 +83,7 @@
     }
   });
 
+  // 送出
   submitBtn.addEventListener('click', handleSubmit);
   [email, password, nickname].forEach((el) => {
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
@@ -101,36 +107,49 @@
         await signInWithEmailAndPassword(auth, emailVal, pwdVal);
         window.location.href = 'chat.html';
       } else {
+        // ===== 註冊分支：立刻打開防早跳轉的護欄 =====
+        sessionStorage.setItem(REDIRECT_GUARD_KEY, '1');
+
         if (nick.length < 3 || nick.length > 24) {
           errorMsg.textContent = '暱稱需 3–24 字';
-          submitBtn.disabled = false; return;
+          submitBtn.disabled = false;
+          sessionStorage.removeItem(REDIRECT_GUARD_KEY);
+          return;
         }
         const lower = nick.toLowerCase();
 
+        // 1) 建立帳號（自動登入）
         const cred = await createUserWithEmailAndPassword(auth, emailVal, pwdVal);
         const uid  = cred.user.uid;
 
-        // 暱稱唯一檢查
+        // 2) 佔用暱稱（唯一）
+        let reservedLower = null;
         const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
           if (cur === null || cur === uid) return uid;
-          return;
+          return; // 已被佔用
         });
-        if (!res.committed) {
-          throw new Error('暱稱已被使用，請換一個');
+        if (!res.committed) throw new Error('暱稱已被使用，請換一個');
+        reservedLower = lower;
+
+        try {
+          // 3) 建立使用者資料（必定寫入 DB）
+          await set(ref(db, `users/${uid}/profile`), {
+            nickname: nick,
+            nicknameLower: lower,
+            registeredAt: Date.now()
+          });
+          await set(ref(db, `users/${uid}/private`), { email: emailVal });
+        } catch (e) {
+          // 寫入失敗則嘗試釋放暱稱（保持資料一致性）
+          if (reservedLower) {
+            try {
+              await runTransaction(ref(db, `nicknames/${reservedLower}`), (cur) => (cur === uid ? null : cur));
+            } catch {}
+          }
+          throw e;
         }
 
-        // 建立使用者資料
-        await set(ref(db, `users/${uid}/profile`), {
-          nickname: nick,
-          nicknameLower: lower,
-          registeredAt: Date.now()
-        });
-        await set(ref(db, `users/${uid}/private`), { email: emailVal });
-
-        // 暫存暱稱，避免聊天室第一次讀不到
-        localStorage.setItem('pendingNickname', nick);
-
-        // 驗證信
+        // 4) 寄送驗證信（不阻擋流程）
         try {
           await sendEmailVerification(cred.user);
           alert('驗證信已寄出，請到信箱收信（可能在垃圾郵件）');
@@ -138,14 +157,27 @@
           alert('驗證信寄送失敗，可在聊天室右上角再寄一次');
         }
 
-        // ✅ 這裡才 redirect，保證 DB 已寫入
+        // （可選）暫存暱稱給聊天室先用
+        localStorage.setItem('pendingNickname', nick);
+
+        // 5) 完成 → 關閉護欄並跳轉
+        sessionStorage.removeItem(REDIRECT_GUARD_KEY);
         window.location.href = 'chat.html';
       }
     } catch (err) {
       errorMsg.textContent = mapAuthErrorToZh(err);
       submitBtn.disabled = false;
+      sessionStorage.removeItem(REDIRECT_GUARD_KEY); // 失敗也關護欄，避免卡住
     }
   }
+
+  // 已登入者手動打開 login.html → 自動回聊天室（但註冊流程進行中則暫停自動跳轉）
+  onAuthStateChanged(auth, (u) => {
+    const signingUp = sessionStorage.getItem(REDIRECT_GUARD_KEY) === '1';
+    if (u && !signingUp) {
+      window.location.replace('chat.html'); // replace 避免返回 login
+    }
+  });
 
   function mapAuthErrorToZh(error) {
     const code = error?.code || '';
