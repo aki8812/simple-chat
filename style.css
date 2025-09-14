@@ -8,7 +8,19 @@ body { margin:0; background-color:var(--bg); font-family:'Segoe UI', "Microsoft 
 @supports (height: 100dvh) {
   .app{ height:100dvh; }
 }
-.sidebar { background:var(--bg2); padding:12px; overflow:auto; border-right:1px solid #1f2225; }
+
+.sidebar { 
+  background:var(--bg2); 
+  border-right:1px solid #1f2225;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.sidebar-content {
+  padding:12px 12px 0 12px;
+  overflow-y: auto;
+  flex: 1;
+}
 .sidebar .brand { font-weight:700; margin-bottom:8px; opacity:.9; cursor:pointer; user-select:none; }
 .userrow{padding:6px 8px; border-radius:6px; cursor:pointer}
 .userrow:hover{background:#2b2f33}
@@ -16,6 +28,19 @@ body { margin:0; background-color:var(--bg); font-family:'Segoe UI', "Microsoft 
 .userrow.admin{ color:#ffd54a; font-weight:700; }        /* 管理員：亮黃 */
 .userrow.banned{ color:#b71c1c; }                        /* 被封：深紅 */
 .tag-admin{ font-size:12px; opacity:.9; margin-left:4px; }
+
+#adminPanel {
+  padding: 12px;
+  border-top: 1px solid #1f2225;
+}
+#manageBtn {
+  width: 100%;
+  background-color: var(--brand2);
+  text-align: center;
+}
+#manageBtn:hover {
+  background-color: #6a707a;
+}
 
 .main { display:grid; grid-template-rows:auto 1fr auto; height:100vh; }
 @supports (height: 100dvh) {
@@ -62,6 +87,8 @@ button.danger:hover{background:#c22626}
 .card-name{ font-weight: bold; font-size: 18px; }
 .card-registered{ font-size: 14px; color: var(--muted); }
 .card-actions{ display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;}
+.card-actions button.promote { background-color: #2d7d46; }
+.card-actions button.promote:hover { background-color: #3a9d5a; }
 
 
 /* 小螢幕：維持側欄存在，但高度用 100dvh，至少可打字 */
@@ -70,47 +97,47 @@ button.danger:hover{background:#c22626}
 }
 
 /* === Scrollbar Theme (Discord-like) === */
-.sidebar::-webkit-scrollbar,
+.sidebar-content::-webkit-scrollbar,
 .chat-box::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-.sidebar:hover::-webkit-scrollbar,
+.sidebar-content:hover::-webkit-scrollbar,
 .chat-box:hover::-webkit-scrollbar {
   width: 12px;
   height: 12px;
 }
-.sidebar::-webkit-scrollbar-track,
+.sidebar-content::-webkit-scrollbar-track,
 .chat-box::-webkit-scrollbar-track {
   background: #1c1f22;
   border-radius: 10px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
 }
-.sidebar::-webkit-scrollbar-thumb,
+.sidebar-content::-webkit-scrollbar-thumb,
 .chat-box::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #3b4050, #2f3344);
   border-radius: 10px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-.sidebar:hover::-webkit-scrollbar-thumb,
+.sidebar-content:hover::-webkit-scrollbar-thumb,
 .chat-box:hover::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #596080, #3a3f5a);
 }
-.sidebar::-webkit-scrollbar-thumb:active,
+.sidebar-content::-webkit-scrollbar-thumb:active,
 .chat-box::-webkit-scrollbar-thumb:active {
   background: linear-gradient(180deg, #6b73a0, #4a5180);
 }
-.sidebar::-webkit-scrollbar-corner,
+.sidebar-content::-webkit-scrollbar-corner,
 .chat-box::-webkit-scrollbar-corner {
   background: #1c1f22;
 }
-.sidebar,
+.sidebar-content,
 .chat-box {
   scrollbar-width: thin;
   scrollbar-color: #3b4050 #1c1f22;
 }
-.sidebar:hover,
+.sidebar-content:hover,
 .chat-box:hover {
   scrollbar-color: #596080 #1c1f22;
 }

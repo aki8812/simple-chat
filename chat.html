@@ -10,9 +10,14 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand" id="brandBtn">SimpleChat</div>
-      <div id="userListContainer">
-        <div class="userlist-loading" style="padding: 6px 8px;">載入使用者列表中...</div>
+      <div class="sidebar-content">
+        <div class="brand" id="brandBtn">SimpleChat</div>
+        <div id="userListContainer">
+          <div class="userlist-loading" style="padding: 6px 8px;">載入使用者列表中...</div>
+        </div>
+      </div>
+      <div id="adminPanel" class="hidden">
+        <button id="manageBtn">成員管理</button>
       </div>
     </aside>
 
@@ -20,7 +25,7 @@
       <header class="topbar">
         <div class="left">
           <div id="verifyBanner" class="banner hidden">
-            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - > 
+            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >  
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
@@ -61,6 +66,8 @@
       logoutBtn: document.getElementById('logout'),
       userCard: document.getElementById('userCard'),
       brandBtn: document.getElementById('brandBtn'),
+      adminPanel: document.getElementById('adminPanel'),
+      manageBtn: document.getElementById('manageBtn'),
     };
 
     const appState = {
@@ -161,14 +168,16 @@
     }
     
     function renderControls() {
-        const { currentUser, bans, users } = appState;
+        const { currentUser, admins, bans, users } = appState;
         const myProfile = users.get(currentUser.uid);
         const isVerified = !!currentUser.emailVerified;
         const isBanned = bans.has(currentUser.uid);
         const hasNick = myProfile && myProfile.nickname;
+        const isAdmin = admins.has(currentUser.uid);
 
         elements.verifyBanner.classList.toggle('hidden', isVerified);
         elements.banBanner.classList.toggle('hidden', !isBanned);
+        elements.adminPanel.classList.toggle('hidden', !isAdmin);
         
         const isDisabled = !isVerified || isBanned || !hasNick;
         elements.inputEl.disabled = isDisabled;
@@ -263,6 +272,7 @@
       elements.logoutBtn.onclick = () => signOut(auth);
       elements.saveNickBtn.onclick = changeNickname;
       elements.brandBtn.onclick = () => location.reload();
+      elements.manageBtn.onclick = () => window.location.href = 'admin.html';
       elements.resendVerify.onclick = async () => {
           try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); } 
           catch { alert('寄送太頻繁，請稍後再試。'); }
@@ -307,10 +317,18 @@
         const { currentUser, users, admins, bans } = appState;
         const targetUser = users.get(uid);
         if (!targetUser) return;
+
         const isMe = currentUser.uid === uid;
-        const isAdmin = admins.has(currentUser.uid);
-        const canManage = isAdmin && !isMe;
+        const isCurrentUserAdmin = admins.has(currentUser.uid);
+        const canManage = isCurrentUserAdmin && !isMe;
+        
         const isTargetBanned = bans.has(uid);
+        const isTargetAdmin = admins.has(uid);
+
+        let adminButtonHtml = '';
+        if (canManage) {
+            adminButtonHtml = `<button id="promoteBtn" class="${isTargetAdmin ? 'danger' : 'promote'}">${isTargetAdmin ? '移除管理員' : '設為管理員'}</button>`;
+        }
 
         const banButtonHtml = canManage 
             ? `<button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button>`
@@ -318,9 +336,10 @@
 
         elements.userCard.innerHTML = `
         <div class="user-card">
-          <div class="card-name">@${targetUser.nickname} ${admins.has(uid) ? '<span class="tag-admin">[管理員]</span>' : ''}</div>
+          <div class="card-name">@${targetUser.nickname} ${isTargetAdmin ? '<span class="tag-admin">[管理員]</span>' : ''}</div>
           <div class="card-registered">註冊時間：${fmt(targetUser.registeredAt)}</div>
           <div class="card-actions">
+            ${adminButtonHtml}
             ${banButtonHtml}
             <button id="closeCard">關閉</button>
           </div>
@@ -339,6 +358,19 @@
             elements.userCard.classList.add('hidden');
           } catch { alert('操作失敗'); }
         };
+        
+        const promoteBtn = document.getElementById('promoteBtn');
+        if (promoteBtn) {
+            promoteBtn.onclick = async () => {
+                const actionText = isTargetAdmin ? '移除其管理員權限' : '將其設為管理員';
+                if (!confirm(`確定要${actionText}？`)) return;
+                const targetRef = ref(db, `admins/${uid}`);
+                try {
+                    await (isTargetAdmin ? remove(targetRef) : set(targetRef, true));
+                    elements.userCard.classList.add('hidden');
+                } catch (err) { alert('操作失敗'); }
+            };
+        }
     }
 
     function renderWithMentions(text) {
