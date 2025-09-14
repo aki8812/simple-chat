@@ -13,7 +13,6 @@
       <div class="brand" id="toChat">← 返回聊天室</div>
       <div class="title">成員管理</div>
     </header>
-
     <section id="listBox" class="list-box">
       <div class="section-title">---載入中---</div>
     </section>
@@ -27,19 +26,79 @@
     const listBox = document.getElementById('listBox');
     document.getElementById('toChat').onclick = () => (location.href = 'chat.html');
 
-    // --- 全新的狀態管理核心 ---
     const appState = {
       currentUser: null,
-      wasAdminOnLoad: false,
       users: new Map(),
       admins: new Set(),
       bans: new Set(),
     };
+    
+    // --- 同步閘門 ---
+    const dataReady = { users: false, admins: false, bans: false };
+    let initialCheckPassed = false;
+    function checkAllDataReady() {
+        if (initialCheckPassed && Object.values(dataReady).every(Boolean)) {
+            updateAndRender(); // 首次渲染
+        }
+    }
 
-    // 任何數據更新都調用此函數
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) return (location.href = 'login.html');
+      appState.currentUser = user;
+
+      const adminSnap = await get(ref(db, `admins/${user.uid}`));
+      if (!adminSnap.exists() || adminSnap.val() !== true) {
+        alert('你沒有權限，無法進入此頁面。');
+        return (location.href = 'chat.html');
+      }
+      
+      initialCheckPassed = true; // 初步權限檢查通過
+      initializeListeners();
+    });
+
+    function initializeListeners() {
+        onValue(ref(db, 'users'), (snap) => {
+            appState.users.clear();
+            snap.forEach(u => {
+                const p = u.val()?.profile;
+                if (p) appState.users.set(u.key, { uid: u.key, ...p });
+            });
+            if (!dataReady.users) {
+                dataReady.users = true;
+                checkAllDataReady();
+            } else {
+                updateAndRender();
+            }
+        });
+
+        onValue(ref(db, 'admins'), (snap) => {
+            appState.admins.clear();
+            snap.forEach(ch => { if (ch.val() === true) appState.admins.add(ch.key); });
+            if (!dataReady.admins) {
+                dataReady.admins = true;
+                checkAllDataReady();
+            } else {
+                updateAndRender();
+            }
+        });
+
+        onValue(ref(db, 'bans'), (snap) => {
+            appState.bans.clear();
+            snap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
+            if (!dataReady.bans) {
+                dataReady.bans = true;
+                checkAllDataReady();
+            } else {
+                updateAndRender();
+            }
+        });
+    }
+
     function updateAndRender() {
-        // 安全檢查：如果最初是管理員，但中途權限被拔除，則踢回聊天室
-        if (appState.wasAdminOnLoad && !appState.admins.has(appState.currentUser.uid)) {
+        if (!initialCheckPassed || !Object.values(dataReady).every(Boolean)) return;
+        
+        // 權限移除檢查
+        if (!appState.admins.has(appState.currentUser.uid)) {
             alert('你的管理員權限已被移除。');
             location.href = 'chat.html';
             return;
@@ -47,56 +106,8 @@
         renderAdminList();
     }
     
-    // ===== Auth & Gatekeeper =====
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) return (location.href = 'login.html');
-      appState.currentUser = user;
-
-      // 守門員：先用 get() 檢查一次性權限，不通過則不執行後續
-      const adminSnap = await get(ref(db, `admins/${user.uid}`));
-      if (!adminSnap.exists() || adminSnap.val() !== true) {
-        alert('你沒有權限，無法進入此頁面。');
-        return (location.href = 'chat.html');
-      }
-      
-      appState.wasAdminOnLoad = true;
-      initializeListeners();
-    });
-
-    function initializeListeners() {
-        onValue(ref(db, 'users'), handleDataSnapshot('users'));
-        onValue(ref(db, 'admins'), handleDataSnapshot('admins'));
-        onValue(ref(db, 'bans'), handleDataSnapshot('bans'));
-    }
-
-    function handleDataSnapshot(type) {
-        return (snap) => {
-            switch(type) {
-                case 'users':
-                    appState.users.clear();
-                    snap.forEach(u => {
-                        const p = u.val()?.profile;
-                        if (p) appState.users.set(u.key, { uid: u.key, ...p });
-                    });
-                    break;
-                case 'admins':
-                    appState.admins.clear();
-                    snap.forEach(ch => { if (ch.val() === true) appState.admins.add(ch.key); });
-                    break;
-                case 'bans':
-                    appState.bans.clear();
-                    snap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
-                    break;
-            }
-            updateAndRender();
-        };
-    }
-    
-    // ===== Rendering =====
     function renderAdminList() {
-        const { users, admins, bans, currentUser } = appState;
-        if (users.size === 0) return;
-
+        const { users, admins, bans } = appState;
         const adminsList = [], bannedList = [], normalList = [];
         users.forEach(user => {
             if (admins.has(user.uid)) adminsList.push(user);
@@ -105,9 +116,7 @@
         });
 
         const sortFn = (a, b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant');
-        adminsList.sort(sortFn);
-        bannedList.sort(sortFn);
-        normalList.sort(sortFn);
+        [adminsList, bannedList, normalList].forEach(list => list.sort(sortFn));
 
         listBox.innerHTML = `
             ${createSectionHtml('---管理員---', adminsList)}
@@ -117,9 +126,7 @@
     }
 
     function createSectionHtml(title, userArray) {
-        const rowsHtml = userArray.length > 0
-            ? userArray.map(createUserRowHtml).join('')
-            : '<div class="empty">（無）</div>';
+        const rowsHtml = userArray.length > 0 ? userArray.map(createUserRowHtml).join('') : '<div class="empty">（無）</div>';
         return `<div class="section-title">${title}</div>${rowsHtml}`;
     }
 
@@ -142,7 +149,6 @@
                 `;
             }
         }
-
         return `
         <div class="member-row ${isAdmin ? 'admin' : ''}" data-uid="${user.uid}">
           <div class="member-head">
@@ -155,11 +161,9 @@
             <div>註冊時間：${fmt(user.registeredAt)}</div>
             <div class="manage-area">${buttonsHtml}</div>
           </div>
-        </div>
-        `;
+        </div>`;
     }
 
-    // ===== Event Delegation for actions =====
     listBox.addEventListener('click', async (e) => {
         const target = e.target;
         const row = target.closest('.member-row');
@@ -180,27 +184,26 @@
             }
         } 
         else if (target.matches('.promote-btn, .demote-btn, .ban-btn')) {
-            handleAdminAction(target.className, uid, user.nickname);
+            handleAdminAction(target, uid, user.nickname);
         }
     });
 
-    async function handleAdminAction(action, uid, nickname) {
+    async function handleAdminAction(target, uid, nickname) {
         const isBanned = appState.bans.has(uid);
-        let confirmMsg = '';
-        let actionFn = null;
+        let confirmMsg, actionFn;
 
-        if (action.includes('promote')) {
+        if (target.classList.contains('promote-btn')) {
             confirmMsg = `確定要將 ${nickname} 設為管理員？`;
             actionFn = () => set(ref(db, `admins/${uid}`), true);
-        } else if (action.includes('demote')) {
+        } else if (target.classList.contains('demote-btn')) {
             confirmMsg = `確定要移除 ${nickname} 的管理員權限？`;
             actionFn = () => remove(ref(db, `admins/${uid}`));
-        } else if (action.includes('ban')) {
+        } else if (target.classList.contains('ban-btn')) {
             confirmMsg = isBanned ? `確定要解封 ${nickname}？` : `確定要封鎖 ${nickname}？`;
             actionFn = () => isBanned ? remove(ref(db, `bans/${uid}`)) : set(ref(db, `bans/${uid}`), true);
         }
 
-        if (confirm(confirmMsg)) {
+        if (actionFn && confirm(confirmMsg)) {
             try { await actionFn(); } catch { alert('操作失敗'); }
         }
     }
