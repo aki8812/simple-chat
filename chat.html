@@ -93,17 +93,22 @@
       me = user;
       try { await reload(me); } catch {}
 
-      // 角色監聽
-      onValue(ref(db, `admins/${me.uid}`), (s) => { isAdmin = !!s.val(); renderUserList(); });
-      onValue(ref(db, `bans/${me.uid}`),   (s) => { isBanned = !!s.val(); refreshControls(); });
+      // 監聽自己的封鎖狀態
+      onValue(ref(db, `bans/${me.uid}`), (s) => {
+        isBanned = !!s.val();
+        refreshControls();
+      });
 
-      // 這兩個清單全站可見（用於標示顏色）
+      // 監聽管理員與封鎖列表 (全站可見，用於標示顏色)
       onValue(adminsRef, (snap) => {
-        adminsSet.clear(); snap.forEach(ch => adminsSet.add(ch.key));
+        adminsSet.clear();
+        snap.forEach(ch => adminsSet.add(ch.key));
+        isAdmin = adminsSet.has(me.uid); // ★ 修改點：從完整的管理員列表同步更新自己的狀態
         renderUserList();
       });
       onValue(bansRef, (snap) => {
-        bansSet.clear(); snap.forEach(ch => bansSet.add(ch.key));
+        bansSet.clear();
+        snap.forEach(ch => bansSet.add(ch.key));
         banBanner.classList.toggle('hidden', !bansSet.has(me.uid));
         refreshControls();
         renderUserList();

@@ -38,13 +38,21 @@
       if (!u) return (location.href = 'login.html');
       me = u;
 
-      // 僅限管理員
-      onValue(ref(db, `admins/${me.uid}`), (s) => {
-        if (!s.val()) { alert('你沒有權限'); location.href = 'chat.html'; }
+      // ★ 修改點：合併監聽器，並加入即時權限檢查
+      onValue(ref(db, 'admins'), (snap) => {
+        adminsSet.clear();
+        snap.forEach(ch => adminsSet.add(ch.key));
+        
+        // 即時檢查權限，若被拔除則踢回聊天室
+        if (!adminsSet.has(me.uid)) {
+          alert('你的管理員權限已被移除');
+          location.href = 'chat.html';
+          return; // 停止後續渲染
+        }
+        rebuild();
       });
 
-      // 訂閱三大集合
-      onValue(ref(db, 'admins'), (snap) => { adminsSet.clear(); snap.forEach(ch => adminsSet.add(ch.key)); rebuild(); });
+      // 訂閱封鎖與使用者列表
       onValue(ref(db, 'bans'),   (snap) => { bansSet.clear();   snap.forEach(ch => bansSet.add(ch.key));   rebuild(); });
       onValue(ref(db, 'users'),  (snap) => {
         users.clear();
