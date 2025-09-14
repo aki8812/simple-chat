@@ -20,7 +20,7 @@
       <header class="topbar">
         <div class="left">
           <div id="verifyBanner" class="banner hidden">
-            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - > 
+            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
@@ -46,9 +46,8 @@
   <script type="module">
     import { auth, db } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, push, onChildAdded, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref, push, onChildAdded, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
-    // --- DOM Elements ---
     const elements = {
       messagesBox: document.getElementById('messages'),
       inputEl: document.getElementById('messageInput'),
@@ -64,26 +63,23 @@
       brandBtn: document.getElementById('brandBtn'),
     };
 
-    // --- App State ---
     const appState = {
       currentUser: null,
       users: new Map(),
       admins: new Set(),
       bans: new Set(),
       messages: new Map(),
+      latestMessageTime: 0,
     };
 
-    // --- Initialization ---
     onAuthStateChanged(auth, async (user) => {
       if (!user) return window.location.href = 'login.html';
       try { await reload(user); } catch {}
       appState.currentUser = user;
-      
-      await initializeApp(); // 執行兩階段初始化
+      await initializeApp();
     });
 
     async function initializeApp() {
-      // --- STAGE 1: 一次性獲取所有初始資料 ---
       try {
         const [usersSnap, adminsSnap, bansSnap] = await Promise.all([
           get(ref(db, 'users')),
@@ -91,7 +87,6 @@
           get(ref(db, 'bans')),
         ]);
 
-        // 將初始資料填入 appState
         usersSnap.forEach(u => {
           const p = u.val()?.profile;
           if (p) appState.users.set(u.key, { uid: u.key, ...p });
@@ -99,11 +94,8 @@
         adminsSnap.forEach(ch => { if (ch.val() === true) appState.admins.add(ch.key); });
         bansSnap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
 
-        // 初始資料載入完成，進行首次渲染
-        updateAndRenderUI();
         await loadInitialMessages();
-        
-        // --- STAGE 2: 開啟即時監聽器 ---
+        updateAndRenderUI();
         attachRealtimeListeners();
         setupEventListeners();
 
@@ -113,7 +105,6 @@
       }
     }
 
-    // --- Realtime Updates ---
     function attachRealtimeListeners() {
       onValue(ref(db, 'users'), (snap) => {
         appState.users.clear();
@@ -136,8 +127,8 @@
         updateAndRenderUI();
       });
       
-      const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(1));
-      onChildAdded(msgQuery, (snap) => {
+      const newMessagesQuery = query(ref(db, 'messages'), orderByChild('time'), startAt(appState.latestMessageTime + 1));
+      onChildAdded(newMessagesQuery, (snap) => {
           if (appState.messages.has(snap.key)) return;
           const msg = snap.val();
           appState.messages.set(snap.key, msg);
@@ -145,9 +136,25 @@
           elements.messagesBox.appendChild(el);
           elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
       });
+
+      onValue(ref(db, 'messages'), (snapshot) => {
+        // This is a catch-all listener for message deletions
+        const serverMessages = snapshot.val() || {};
+        const serverKeys = new Set(Object.keys(serverMessages));
+        const localKeys = Array.from(appState.messages.keys());
+        
+        localKeys.forEach(localKey => {
+            if (!serverKeys.has(localKey)) {
+                appState.messages.delete(localKey);
+                const msgElement = elements.messagesBox.querySelector(`[data-msg-id="${localKey}"]`);
+                if (msgElement) {
+                    msgElement.remove();
+                }
+            }
+        });
+      });
     }
 
-    // --- UI Rendering ---
     function updateAndRenderUI() {
       renderControls();
       renderUserList();
@@ -192,32 +199,26 @@
     }
     
     function renderAllMessages() {
-        elements.messagesBox.querySelectorAll('.chat-message').forEach(el => {
-            const msgId = el.dataset.msgId;
-            const msgData = appState.messages.get(msgId);
-            if (msgData) {
-                const newEl = createMessageElement(msgId, msgData);
-                if (el.innerHTML !== newEl.innerHTML) {
-                  el.replaceWith(newEl);
-                }
-            }
-        });
+        const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
+        elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
+        elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
     }
 
-    // --- Message Logic ---
     async function loadInitialMessages() {
         const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(30));
         const initialSnap = await get(msgQuery);
         
         if (initialSnap.exists()) {
-            initialSnap.forEach(snap => appState.messages.set(snap.key, snap.val()));
+            let maxTime = 0;
+            initialSnap.forEach(snap => {
+                const msg = snap.val();
+                appState.messages.set(snap.key, msg);
+                if (msg.time > maxTime) {
+                    maxTime = msg.time;
+                }
+            });
+            appState.latestMessageTime = maxTime;
         }
-        const sortedMessages = Array.from(appState.messages.values()).sort((a, b) => a.time - b.time);
-        elements.messagesBox.innerHTML = sortedMessages.map(msg => {
-            const key = Array.from(appState.messages.keys()).find(k => appState.messages.get(k) === msg);
-            return createMessageElement(key, msg).outerHTML;
-        }).join('');
-        elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
     }
 
     function createMessageElement(key, msg) {
@@ -257,7 +258,6 @@
       } catch { alert('訊息傳送失敗。'); }
     }
 
-    // --- Event Listeners & Helpers ---
     function setupEventListeners() {
       elements.sendBtn.onclick = sendMessage;
       elements.inputEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }};
