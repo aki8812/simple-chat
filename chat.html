@@ -20,7 +20,7 @@
       <header class="topbar">
         <div class="left">
           <div id="verifyBanner" class="banner hidden">
-            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >
+            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - > 
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
@@ -138,7 +138,6 @@
       });
 
       onValue(ref(db, 'messages'), (snapshot) => {
-        // This is a catch-all listener for message deletions
         const serverMessages = snapshot.val() || {};
         const serverKeys = new Set(Object.keys(serverMessages));
         const localKeys = Array.from(appState.messages.keys());
@@ -312,16 +311,25 @@
         const isAdmin = admins.has(currentUser.uid);
         const canManage = isAdmin && !isMe;
         const isTargetBanned = bans.has(uid);
+
+        const banButtonHtml = canManage 
+            ? `<button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button>`
+            : '';
+
         elements.userCard.innerHTML = `
         <div class="user-card">
           <div class="card-name">@${targetUser.nickname} ${admins.has(uid) ? '<span class="tag-admin">[管理員]</span>' : ''}</div>
           <div class="card-registered">註冊時間：${fmt(targetUser.registeredAt)}</div>
-          ${canManage ? `<div class="card-actions"><button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button></div>` : ''}
-          <div class="card-actions"><button id="closeCard">關閉</button></div>
+          <div class="card-actions">
+            ${banButtonHtml}
+            <button id="closeCard">關閉</button>
+          </div>
         </div>`;
         elements.userCard.classList.remove('hidden');
+        
         const closeBtn = document.getElementById('closeCard');
         if (closeBtn) closeBtn.onclick = () => elements.userCard.classList.add('hidden');
+        
         const banBtn = document.getElementById('banBtn');
         if (banBtn) banBtn.onclick = async () => {
           if (!confirm(isTargetBanned ? '確定要解封？' : '確定封鎖此用戶？')) return;
