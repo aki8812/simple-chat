@@ -11,7 +11,9 @@
   <div class="app">
     <aside class="sidebar">
       <div class="brand" id="brandBtn">SimpleChat</div>
-      <div class="userlist" id="userList"></div>
+      <div id="userListContainer">
+        <div class="userlist-loading">載入使用者列表中...</div>
+      </div>
     </aside>
 
     <main class="main">
@@ -33,13 +35,12 @@
       <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
 
       <div class="input-area">
-        <input type="text" id="messageInput" placeholder="輸入訊息...（可 @暱稱）" autocomplete="off" />
-        <button id="sendBtn" type="button">送出</button>
+        <input type="text" id="messageInput" placeholder="載入中..." autocomplete="off" disabled />
+        <button id="sendBtn" type="button" disabled>送出</button>
       </div>
     </main>
   </div>
 
-  <!-- 使用者卡片 -->
   <div id="userCard" class="popup hidden"></div>
 
   <script type="module">
@@ -48,158 +49,158 @@
     import { ref, push, onChildAdded, query, orderByChild, limitToLast, endAt, get, onValue, remove, update, runTransaction, set } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     // DOM Elements
-    const messagesBox   = document.getElementById('messages');
-    const inputEl       = document.getElementById('messageInput');
-    const sendBtn       = document.getElementById('sendBtn');
-    const userListEl    = document.getElementById('userList');
-    const verifyBanner  = document.getElementById('verifyBanner');
-    const banBanner     = document.getElementById('banBanner');
-    const resendVerify  = document.getElementById('resendVerify');
-    const newNickEl     = document.getElementById('newNickname');
-    const saveNickBtn   = document.getElementById('saveNickname');
-    const logoutBtn     = document.getElementById('logout');
-    const userCard      = document.getElementById('userCard');
-    const brandBtn      = document.getElementById('brandBtn');
+    const elements = {
+      messagesBox: document.getElementById('messages'),
+      inputEl: document.getElementById('messageInput'),
+      sendBtn: document.getElementById('sendBtn'),
+      userListContainer: document.getElementById('userListContainer'),
+      verifyBanner: document.getElementById('verifyBanner'),
+      banBanner: document.getElementById('banBanner'),
+      resendVerify: document.getElementById('resendVerify'),
+      newNickEl: document.getElementById('newNickname'),
+      saveNickBtn: document.getElementById('saveNickname'),
+      logoutBtn: document.getElementById('logout'),
+      userCard: document.getElementById('userCard'),
+      brandBtn: document.getElementById('brandBtn'),
+    };
 
-    // App State
-    let me = null;
-    let myProfile = null;
-    let isAdmin = false;
+    // --- 全新的狀態管理核心 ---
+    const appState = {
+      currentUser: null,
+      isReady: false,
+      users: new Map(),
+      admins: new Set(),
+      bans: new Set(),
+      messages: new Map(),
+    };
 
-    const users = new Map();
-    const adminsSet = new Set();
-    const bansSet = new Set();
-    const loadedMessages = new Map();
+    // 任何數據更新都調用此函數，以確保UI同步
+    function updateAndRender() {
+      if (!appState.currentUser) return;
+      appState.isReady = appState.users.size > 0;
 
-    // ===== Auth & Initialization =====
+      renderControls();
+      renderUserList();
+      renderAllMessages();
+    }
+
+    // ===== Authentication & Data Listeners =====
     onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        window.location.href = 'login.html';
-        return;
-      }
-      me = user;
-      try { await reload(me); } catch {}
-
-      // Start listening to data changes
-      initializeListeners();
-
-      // Load initial messages
-      const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(25));
-      const msgSnap = await get(msgQuery);
-      messagesBox.innerHTML = '';
-      if (msgSnap.exists()) {
-        msgSnap.forEach(snap => addMessage(snap.key, snap.val(), false));
-      }
-      onChildAdded(msgQuery, (snap) => addMessage(snap.key, snap.val(), false));
+      if (!user) return window.location.href = 'login.html';
       
-      messagesBox.scrollTop = messagesBox.scrollHeight;
-      messagesBox.addEventListener('scroll', handleScroll);
+      try { await reload(user); } catch {}
+      appState.currentUser = user;
 
-      // Bind UI events
-      sendBtn.addEventListener('click', sendMessage);
-      inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }});
-      logoutBtn.addEventListener('click', () => signOut(auth));
-      resendVerify.addEventListener('click', resendVerificationEmail);
-      saveNickBtn.addEventListener('click', changeNickname);
-      brandBtn.addEventListener('click', () => location.reload());
+      // 設置監聽器
+      onValue(ref(db, 'users'), handleDataSnapshot('users'));
+      onValue(ref(db, 'admins'), handleDataSnapshot('admins'));
+      onValue(ref(db, 'bans'), handleDataSnapshot('bans'));
+
+      // 載入初始訊息
+      loadInitialMessages();
+      setupEventListeners();
     });
 
-    function initializeListeners() {
-      // ★ 核心監聽 #1：Admins - 這是所有管理員權限的唯一來源
-      onValue(ref(db, 'admins'), (snap) => {
-        adminsSet.clear();
-        snap.forEach(ch => {
-          // 確保值為 true
-          if (ch.val() === true) {
-            adminsSet.add(ch.key);
-          }
-        });
-        isAdmin = adminsSet.has(me.uid);
-        // 管理員列表變更後，強制重繪所有相關UI
-        rerenderAllUIs();
-      });
-
-      // 監聽 Users - 用於顯示暱稱和列表
-      onValue(ref(db, 'users'), (snap) => {
-        users.clear();
-        snap.forEach((u) => {
-          const p = u.val()?.profile;
-          if (p) users.set(u.key, p);
-        });
-        if (users.has(me.uid)) {
-            myProfile = users.get(me.uid);
-            newNickEl.value = myProfile.nickname || '';
+    function handleDataSnapshot(type) {
+      return (snap) => {
+        switch (type) {
+          case 'users':
+            appState.users.clear();
+            snap.forEach(u => {
+              const p = u.val()?.profile;
+              if (p) appState.users.set(u.key, { uid: u.key, ...p });
+            });
+            break;
+          case 'admins':
+            appState.admins.clear();
+            snap.forEach(ch => { if (ch.val() === true) appState.admins.add(ch.key); });
+            break;
+          case 'bans':
+            appState.bans.clear();
+            snap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
+            break;
         }
-        rerenderAllUIs();
-      });
-
-      // 監聽 Bans - 用於控制發話權限
-      onValue(ref(db, 'bans'), (snap) => {
-        bansSet.clear();
-        snap.forEach(ch => bansSet.add(ch.key));
-        rerenderAllUIs();
-      });
+        updateAndRender();
+      };
     }
 
-    // ★ 統一重繪函式
-    function rerenderAllUIs() {
-        if (!me || !users.size) return;
-        renderUserList();
-        refreshControls();
-        rerenderMessages(); // 重繪訊息，更新刪除按鈕狀態
-    }
-
-    function refreshControls() {
-      const verified = !!me.emailVerified;
-      const isBanned = bansSet.has(me.uid);
-      verifyBanner.classList.toggle('hidden', verified);
-      banBanner.classList.toggle('hidden', !isBanned);
-      
+    // ===== Rendering Functions =====
+    function renderControls() {
+      const { currentUser, bans, users } = appState;
+      const myProfile = users.get(currentUser.uid);
+      const isVerified = !!currentUser.emailVerified;
+      const isBanned = bans.has(currentUser.uid);
       const hasNick = myProfile && myProfile.nickname;
-      const disabled = !verified || isBanned || !hasNick;
 
-      inputEl.disabled = disabled;
-      sendBtn.disabled = disabled;
-      inputEl.placeholder = disabled 
-        ? (isBanned ? '您已被管理員封鎖' : (!verified ? '請先驗證 Email' : '請先設定暱稱'))
+      elements.verifyBanner.classList.toggle('hidden', isVerified);
+      elements.banBanner.classList.toggle('hidden', !isBanned);
+      
+      const isDisabled = !isVerified || isBanned || !hasNick;
+      elements.inputEl.disabled = isDisabled;
+      elements.sendBtn.disabled = isDisabled;
+      elements.inputEl.placeholder = isDisabled
+        ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
         : '輸入訊息...（可 @暱稱）';
+        
+      if(myProfile) elements.newNickEl.value = myProfile.nickname || '';
     }
 
-    // ===== Messages =====
-    function addMessage(key, msg, prepend = false) {
-      if (!msg || loadedMessages.has(key)) return;
+    function renderUserList() {
+      const { currentUser, users, admins, bans } = appState;
+      const userArray = Array.from(users.values());
+      userArray.sort((a, b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant'));
+      
+      const html = userArray.map(u => {
+        const isMe = currentUser.uid === u.uid;
+        const isAdmin = admins.has(u.uid);
+        const isBanned = bans.has(u.uid);
+        const classes = ['userrow', isMe && 'me', isAdmin && 'admin', isBanned && 'banned'].filter(Boolean).join(' ');
+        const adminTag = isAdmin ? ' <span class="tag-admin">[管理員]</span>' : '';
+        return `<div class="${classes}" data-uid="${u.uid}">@${u.nickname || '未命名'}${adminTag}</div>`;
+      }).join('');
 
-      const messageElement = createMessageElement(key, msg);
-      loadedMessages.set(key, { data: msg, element: messageElement });
-
-      if (prepend) {
-        const oldHeight = messagesBox.scrollHeight;
-        messagesBox.insertBefore(messageElement, messagesBox.firstChild);
-        messagesBox.scrollTop += messagesBox.scrollHeight - oldHeight;
-      } else {
-        const isAtBottom = messagesBox.scrollHeight - messagesBox.clientHeight <= messagesBox.scrollTop + 5;
-        messagesBox.appendChild(messageElement);
-        if (isAtBottom) {
-          messagesBox.scrollTop = messagesBox.scrollHeight;
-        }
-      }
+      elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
     }
-    
+
+    function renderAllMessages() {
+        elements.messagesBox.querySelectorAll('.chat-message').forEach(el => {
+            const msgId = el.dataset.msgId;
+            const msgData = appState.messages.get(msgId);
+            if (msgData) {
+                const newEl = createMessageElement(msgId, msgData);
+                el.replaceWith(newEl);
+            }
+        });
+    }
+
+    // ===== Message Handling =====
+    function loadInitialMessages() {
+      const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(30));
+      onChildAdded(msgQuery, (snap) => {
+        const key = snap.key;
+        const msg = snap.val();
+        if (appState.messages.has(key)) return; // 防止重複添加
+        appState.messages.set(key, msg);
+        const el = createMessageElement(key, msg);
+        elements.messagesBox.appendChild(el);
+        elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
+      });
+    }
+
     function createMessageElement(key, msg) {
-        const isSelf = me && msg.uid === me.uid;
-        const canDelete = me && (isSelf || isAdmin);
+        const { currentUser, admins } = appState;
+        const isSelf = currentUser.uid === msg.uid;
+        const isAdmin = admins.has(currentUser.uid);
+        const canDelete = isSelf || isAdmin;
 
         const wrap = document.createElement('div');
         wrap.className = `chat-message ${isSelf ? 'self' : 'other'}`;
         wrap.dataset.msgId = key;
-        
+
         const bubble = document.createElement('div');
         bubble.className = 'bubble';
         
-        let deleteBtnHtml = '';
-        if (canDelete) {
-            deleteBtnHtml = `<button class="del-btn" data-key="${key}">刪除</button>`;
-        }
+        const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
 
         bubble.innerHTML = `
             <div class="bubble-head">
@@ -209,153 +210,122 @@
             <div class="bubble-text">${renderWithMentions(msg.text)}</div>
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         `;
-        wrap.appendChild(bubble);
         return wrap;
     }
 
-    // 重新渲染所有訊息（主要用於更新權限）
-    function rerenderMessages() {
-        loadedMessages.forEach(({ data, element }, key) => {
-            const isSelf = me && data.uid === me.uid;
-            const canDelete = me && (isSelf || isAdmin);
-            const delBtn = element.querySelector('.del-btn');
-            
-            if (canDelete && !delBtn) {
-                // 新增刪除按鈕
-                const head = element.querySelector('.bubble-head');
-                const btn = document.createElement('button');
-                btn.className = 'del-btn';
-                btn.textContent = '刪除';
-                btn.dataset.key = key;
-                head.appendChild(btn);
-            } else if (!canDelete && delBtn) {
-                // 移除刪除按鈕
-                delBtn.remove();
-            }
+    async function sendMessage() {
+      const text = elements.inputEl.value.trim();
+      if (!text) return;
+      
+      const myProfile = appState.users.get(appState.currentUser.uid);
+      try {
+        await push(ref(db, 'messages'), {
+          uid: appState.currentUser.uid,
+          text,
+          time: Date.now(),
+          nickname: myProfile.nickname,
         });
+        elements.inputEl.value = '';
+      } catch { alert('訊息傳送失敗。'); }
     }
 
-    messagesBox.addEventListener('click', e => {
+    // ===== Event Listeners Setup =====
+    function setupEventListeners() {
+      elements.sendBtn.onclick = sendMessage;
+      elements.inputEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }};
+      elements.logoutBtn.onclick = () => signOut(auth);
+      elements.saveNickBtn.onclick = changeNickname;
+      elements.brandBtn.onclick = () => location.reload();
+      elements.resendVerify.onclick = async () => {
+          try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); } 
+          catch { alert('寄送太頻繁，請稍後再試。'); }
+      };
+      
+      // 使用事件委派處理動態內容
+      elements.userListContainer.addEventListener('click', e => {
+        const target = e.target.closest('.userrow');
+        if(target) openUserCard(target.dataset.uid);
+      });
+
+      elements.messagesBox.addEventListener('click', e => {
         if (e.target.classList.contains('del-btn')) {
-            const key = e.target.dataset.key;
-            if (confirm('確定要刪除此訊息？')) {
-                remove(ref(db, `messages/${key}`)).catch(() => alert('刪除失敗'));
-            }
+          const key = e.target.dataset.key;
+          if (confirm('確定要刪除此訊息？')) {
+            remove(ref(db, `messages/${key}`)).catch(() => alert('刪除失敗'));
+          }
         }
         if (e.target.classList.contains('bubble-name')) {
-            openUserCard(e.target.dataset.uid);
+          openUserCard(e.target.dataset.uid);
         }
-    });
-
-    // ===== Nickname =====
-    async function changeNickname() {
-      if (!me) return;
-      const newNick = (newNickEl.value || '').trim();
-      if (newNick.length < 3 || newNick.length > 24) return alert('暱稱需 3–24 字');
-      
-      const lower = newNick.toLowerCase();
-      const oldLower = (myProfile?.nicknameLower || '');
-
-      if(lower === oldLower) return alert('新舊暱稱相同');
-
-      try {
-        const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => (cur === null || cur === me.uid) ? me.uid : undefined);
-        if (!res.committed) return alert('暱稱已被使用，請換一個');
-
-        await update(ref(db, `users/${me.uid}/profile`), { nickname: newNick, nicknameLower: lower });
-        if (oldLower) await set(ref(db, `nicknames/${oldLower}`), null);
-        
-        alert('已更新暱稱');
-      } catch (e) { alert('更新失敗，請稍後再試'); }
+      });
     }
 
-    // ===== User List & Card =====
-    function renderUserList() {
-      const arr = Array.from(users.values()).map(p => ({ ...p }));
-      arr.sort((a,b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant'));
-      
-      userListEl.innerHTML = arr.map(u => {
-        const isMe = me && u.uid === me.uid;
-        const isAdm = adminsSet.has(u.uid);
-        const isBan = bansSet.has(u.uid);
-        const classes = ['userrow', isMe && 'me', isAdm && 'admin', isBan && 'banned'].filter(Boolean).join(' ');
-        const label = isAdm ? ' <span class="tag-admin">[管理員]</span>' : '';
-        return `<div class="${classes}" data-uid="${u.uid}">@${u.nickname || '未命名'}${label}</div>`;
-      }).join('');
-      
-      userListEl.querySelectorAll('.userrow').forEach(el => el.addEventListener('click', () => openUserCard(el.dataset.uid)));
+    // ===== Other Functions (Nickname, User Card, Helpers) =====
+    async function changeNickname() {
+        const newNick = elements.newNickEl.value.trim();
+        if (newNick.length < 3 || newNick.length > 24) return alert('暱稱需 3–24 字');
+        
+        const uid = appState.currentUser.uid;
+        const myProfile = appState.users.get(uid);
+        const lower = newNick.toLowerCase();
+        const oldLower = myProfile?.nicknameLower || '';
+
+        if(lower === oldLower) return;
+
+        try {
+            const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => (cur === null || cur === uid) ? uid : undefined);
+            if (!res.committed) return alert('暱稱已被使用，請換一個');
+
+            await update(ref(db, `users/${uid}/profile`), { nickname: newNick, nicknameLower: lower });
+            if (oldLower) await set(ref(db, `nicknames/${oldLower}`), null);
+            alert('已更新暱稱');
+        } catch (e) { alert('更新失敗，請稍後再試'); }
     }
 
     function openUserCard(uid) {
-        const p = users.get(uid); if (!p) return;
-        const isMe = me && uid === me.uid;
-        const canManage = isAdmin && !isMe;
-        const isTargetBanned = bansSet.has(uid);
+        const { currentUser, users, admins, bans } = appState;
+        const targetUser = users.get(uid);
+        if (!targetUser) return;
         
-        userCard.innerHTML = `
+        const isMe = currentUser.uid === uid;
+        const isAdmin = admins.has(currentUser.uid);
+        const canManage = isAdmin && !isMe;
+        const isTargetBanned = bans.has(uid);
+
+        elements.userCard.innerHTML = `
         <div class="user-card">
-          <div class="card-info">
-            <div class="card-name">@${p.nickname} ${adminsSet.has(uid) ? '<span class="tag-admin" style="font-size:12px;">[管理員]</span>' : ''}</div>
-            <div class="card-registered">註冊時間：${fmt(p.registeredAt)}</div>
-            ${canManage ? `<div style="margin-top:10px"><button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button></div>` : ''}
-            <div style="margin-top:10px"><button id="closeCard">關閉</button></div>
-          </div>
+          <div class="card-name">@${targetUser.nickname} ${admins.has(uid) ? '<span class="tag-admin">[管理員]</span>' : ''}</div>
+          <div class="card-registered">註冊時間：${fmt(targetUser.registeredAt)}</div>
+          ${canManage ? `<div class="card-actions"><button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button></div>` : ''}
+          <div class="card-actions"><button id="closeCard">關閉</button></div>
         </div>`;
-        userCard.classList.remove('hidden');
-        document.getElementById('closeCard').onclick = () => userCard.classList.add('hidden');
+        elements.userCard.classList.remove('hidden');
+
+        const closeBtn = document.getElementById('closeCard');
+        if (closeBtn) closeBtn.onclick = () => elements.userCard.classList.add('hidden');
         
         const banBtn = document.getElementById('banBtn');
         if (banBtn) banBtn.onclick = async () => {
-          if (!confirm(isTargetBanned ? '確定要解封此用戶？' : '確定封鎖此用戶？')) return;
+          if (!confirm(isTargetBanned ? '確定要解封？' : '確定要封鎖？')) return;
+          const targetRef = ref(db, `bans/${uid}`);
           try { 
-            await (isTargetBanned ? remove(ref(db, `bans/${uid}`)) : set(ref(db, `bans/${uid}`), true));
-            alert(isTargetBanned ? '已解封' : '已封鎖');
-            userCard.classList.add('hidden');
+            await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
+            elements.userCard.classList.add('hidden');
           } catch { alert('操作失敗'); }
         };
     }
-    
-    // ===== Helpers =====
-    async function resendVerificationEmail() {
-        try { await sendEmailVerification(me); alert('已重新寄出驗證信。'); } catch(e) { alert('寄送失敗，可能寄送太頻繁。'); }
-    }
 
-    function handleScroll() { /* ... 捲動載入更多 ... */ }
-    function renderWithMentions(text) { /* ... 提及 ... */ }
-    function fmt(ts) { /* ... 時間格式 ... */ }
-    
-    // 把 helper 函式實作補上
-    function fmt(ts) {
-      if (typeof ts === 'number' && isFinite(ts)) return new Date(ts).toLocaleString();
-      return '—';
-    }
-    
     function renderWithMentions(text) {
-      if (!text) return '';
-      const names = new Set(Array.from(users.values()).map(u => u.nickname).filter(Boolean));
-      const escapedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      return escapedText.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => 
-        names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m
-      );
+        const names = new Set(Array.from(appState.users.values()).map(u => u.nickname).filter(Boolean));
+        const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => 
+            names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m
+        );
     }
     
-    async function handleScroll() {
-        if (messagesBox.scrollTop > 20) return;
-        const firstMsgEl = messagesBox.querySelector('.chat-message');
-        if (!firstMsgEl) return;
-        const firstMsgKey = firstMsgEl.dataset.msgId;
-        const firstMsgTime = loadedMessages.get(firstMsgKey)?.data.time;
-        if (!firstMsgTime) return;
-
-        const moreQ = query(ref(db, 'messages'), orderByChild('time'), endAt(firstMsgTime - 1), limitToLast(25));
-        const snap = await get(moreQ);
-        if (snap.exists()) {
-            const messages = [];
-            snap.forEach(s => messages.push({ key: s.key, val: s.val() }));
-            messages.reverse().forEach(m => addMessage(m.key, m.val, true));
-        }
+    function fmt(ts) {
+        return ts ? new Date(ts).toLocaleString() : '—';
     }
-
   </script>
 </body>
 </html>
