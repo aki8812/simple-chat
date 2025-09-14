@@ -1,4 +1,4 @@
-:root { --bg:#2c2f33; --bg2:#23272a; --panel:#36393f; --brand:#5865f2; --brand2:#4f545c; --text:#fff; --muted:#ccc; }
+:root { --bg:#2c2f33; --bg2:#23272a; --panel:#36393f; --brand:#5865f2; --brand2:#4f545c; --text:#fff; --muted:#ccc; --green: #2d7d46; --red: #aa2828; }
 *{box-sizing:border-box}
 html,body{height:100%; margin:0; background:var(--bg); color:var(--text); font-family:'Segoe UI', "Microsoft JhengHei", sans-serif;}
 
@@ -9,14 +9,14 @@ html,body{height:100%; margin:0; background:var(--bg); color:var(--text); font-f
 .topbar .brand{ cursor:pointer; font-weight:700; }
 .topbar .title{ font-weight:700; opacity:.95 }
 
-.list-box{ flex:1; overflow:auto; padding:12px; background:var(--bg); display:flex; flex-direction:column; gap:8px; }
+.list-box{ flex:1; overflow:auto; padding:12px; background:var(--bg); }
 
-.section-title{ color:#9aa7bd; font-weight:700; margin:10px 0 4px; }
-.empty{ color:#9aa7bd; font-style:italic; padding:6px 8px; background:#2f3338; border-radius:6px; }
+.section-title{ color:#9aa7bd; font-weight:700; margin:14px 0 6px; }
+.empty{ color:#9aa7bd; font-style:italic; padding:6px 8px; background:#2f3338; border-radius:6px; margin-top: 4px; }
 
-.member-row{ background:var(--panel); border:1px solid #1f2225; border-radius:8px; padding:10px 12px; }
+.member-row{ background:var(--panel); border:1px solid #1f2225; border-radius:8px; padding:10px 12px; margin-bottom: 8px; }
 .member-row.admin .name{ color:#ffd54a; font-weight:700; }
-.member-row.banned .name{ color:#b71c1c; }
+.member-row.banned .name{ color:#ff6b6b; text-decoration: line-through; }
 .tag-admin{ font-size:12px; opacity:.9; margin-left:6px; }
 
 .member-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
@@ -24,69 +24,81 @@ html,body{height:100%; margin:0; background:var(--bg); color:var(--text); font-f
 .member-head .toggle{ background:#7289da; color:#fff; border:0; border-radius:6px; padding:4px 8px; cursor:pointer; }
 .member-head .toggle:hover{ background:#5b6eae; }
 
-.member-body{ margin-top:8px; background:#2f3338; border-radius:6px; padding:10px; }
+.member-body{ margin-top:10px; background:#2f3338; border-radius:6px; padding:10px; font-size: 14px; color: var(--muted); }
 .hidden{ display:none; }
 
-button.danger{ background:#e02e2e; color:#fff; border:0; border-radius:6px; padding:6px 10px; cursor:pointer; }
-button.danger:hover{ background:#c22626; }
+.manage-area {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #42464d;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
-/* === Scrollbar Theme (Discord-like) ===
-   作用範圍：.sidebar（使用者列表）與 .chat-box（訊息區）
-   只調整滾輪外觀與捲動手感，不影響其他樣式
----------------------------------------------------------------- */
+.manage-area button {
+  border: none;
+  border-radius: 5px;
+  padding: 6px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.manage-area .promote-btn { background-color: var(--green); color: white; }
+.manage-area .promote-btn:hover { background-color: #3a9d5a; }
+
+.manage-area .demote-btn { background-color: var(--red); color: white; }
+.manage-area .demote-btn:hover { background-color: #c83c3c; }
+
+.manage-area .ban-btn { background-color: #4f545c; color: white; }
+.manage-area .ban-btn:hover { background-color: #6a707a; }
+.manage-area .ban-btn.danger { background-color: var(--red); }
+.manage-area .ban-btn.danger:hover { background-color: #c83c3c; }
+
+/* === Scrollbar Theme (Discord-like) === */
 
 /* WebKit 系列（Chrome / Edge / Safari） */
-.sidebar::-webkit-scrollbar,
-.chat-box::-webkit-scrollbar {
+.list-box::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-.sidebar:hover::-webkit-scrollbar,
-.chat-box:hover::-webkit-scrollbar {
-  width: 12px;  /* 滑過時微加寬，抓取更容易 */
+.list-box:hover::-webkit-scrollbar {
+  width: 12px;
   height: 12px;
 }
-.sidebar::-webkit-scrollbar-track,
-.chat-box::-webkit-scrollbar-track {
+.list-box::-webkit-scrollbar-track {
   background: #1c1f22;
   border-radius: 10px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
 }
-.sidebar::-webkit-scrollbar-thumb,
-.chat-box::-webkit-scrollbar-thumb {
+.list-box::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #3b4050, #2f3344);
   border-radius: 10px;
-  border: 2px solid transparent;    /* 與 track 之間留縫，視覺更精緻 */
+  border: 2px solid transparent;
   background-clip: padding-box;
 }
-.sidebar:hover::-webkit-scrollbar-thumb,
-.chat-box:hover::-webkit-scrollbar-thumb {
+.list-box:hover::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #596080, #3a3f5a);
 }
-.sidebar::-webkit-scrollbar-thumb:active,
-.chat-box::-webkit-scrollbar-thumb:active {
+.list-box::-webkit-scrollbar-thumb:active {
   background: linear-gradient(180deg, #6b73a0, #4a5180);
 }
-/* 角落交會區塊 */
-.sidebar::-webkit-scrollbar-corner,
-.chat-box::-webkit-scrollbar-corner {
+.list-box::-webkit-scrollbar-corner {
   background: #1c1f22;
 }
 
 /* Firefox */
-.sidebar,
-.chat-box {
-  scrollbar-width: thin; /* 細滾輪 */
-  scrollbar-color: #3b4050 #1c1f22; /* thumb 顏色 / track 顏色 */
+.list-box {
+  scrollbar-width: thin;
+  scrollbar-color: #3b4050 #1c1f22;
 }
-.sidebar:hover,
-.chat-box:hover {
+.list-box:hover {
   scrollbar-color: #596080 #1c1f22;
 }
 
-/* 捲動手感微調（僅限 .chat-box，不影響排版結構） */
-.chat-box {
-  scrollbar-gutter: stable;   /* 避免顯示/隱藏滾輪時內容跳動 */
-  overscroll-behavior: contain; /* 防止內層捲動牽動整頁 */
-  scroll-behavior: smooth;    /* 平滑捲動 */
+.list-box {
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
 }

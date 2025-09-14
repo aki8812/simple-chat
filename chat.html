@@ -47,11 +47,6 @@
     import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
     import { ref, push, onChildAdded, query, orderByChild, limitToLast, endAt, get, onValue, remove, update, runTransaction, set } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
-    const messagesRef = ref(db, 'messages');
-    const usersRef    = ref(db, 'users');
-    const adminsRef   = ref(db, 'admins');
-    const bansRef     = ref(db, 'bans');
-
     const messagesBox   = document.getElementById('messages');
     const inputEl       = document.getElementById('messageInput');
     const sendBtn       = document.getElementById('sendBtn');
@@ -70,22 +65,11 @@
     let me = null;
     let myProfile = null;
     let isAdmin = false;
-    let isBanned = false;
 
-    const users = new Map();     // uid -> { nickname, nicknameLower, registeredAt }
-    const adminsSet = new Set(); // uid in admins
-    const bansSet   = new Set(); // uid in bans
-
-    const PAGE = 25;
-    let oldestTime = Number.MAX_SAFE_INTEGER;
-    const loadedKeys = new Set();
-
-    function fmt(ts) {
-      if (typeof ts === 'number' && isFinite(ts)) return new Date(ts).toLocaleString();
-      const n = Number(ts);
-      if (isFinite(n)) return new Date(n).toLocaleString();
-      return '—';
-    }
+    const users = new Map();
+    const adminsSet = new Set();
+    const bansSet = new Set();
+    let dataReady = { users: false, admins: false, bans: false, profile: false };
 
     // ===== Auth & 初始載入 =====
     onAuthStateChanged(auth, async (user) => {
@@ -93,80 +77,75 @@
       me = user;
       try { await reload(me); } catch {}
 
-      // 監聽自己的封鎖狀態
-      onValue(ref(db, `bans/${me.uid}`), (s) => {
-        isBanned = !!s.val();
-        refreshControls();
-      });
-
-      // 監聽管理員與封鎖列表 (全站可見，用於標示顏色)
-      onValue(adminsRef, (snap) => {
+      // 所有監聽器只更新數據，並呼叫一個統一的渲染函式
+      onValue(ref(db, 'admins'), (snap) => {
         adminsSet.clear();
         snap.forEach(ch => adminsSet.add(ch.key));
-        isAdmin = adminsSet.has(me.uid); // ★ 修改點：從完整的管理員列表同步更新自己的狀態
-        renderUserList();
+        isAdmin = adminsSet.has(me.uid);
+        dataReady.admins = true;
+        tryMasterRender();
       });
-      onValue(bansRef, (snap) => {
+      onValue(ref(db, 'bans'), (snap) => {
         bansSet.clear();
         snap.forEach(ch => bansSet.add(ch.key));
-        banBanner.classList.toggle('hidden', !bansSet.has(me.uid));
-        refreshControls();
-        renderUserList();
+        dataReady.bans = true;
+        tryMasterRender();
       });
-
-      // 我的檔案（不主動覆蓋暱稱；若缺註冊時間只補該欄位）
-      onValue(ref(db, `users/${me.uid}/profile`), async (s) => {
-        if (!s.exists()) { myProfile = null; newNickEl.value=''; refreshControls(); return; }
-        myProfile = s.val();
-        if (myProfile && (myProfile.registeredAt === undefined || myProfile.registeredAt === null)) {
-          try { await update(ref(db, `users/${me.uid}/profile`), { registeredAt: Date.now() }); } catch {}
-        }
-        newNickEl.value = myProfile.nickname || '';
-        refreshControls();
+      onValue(ref(db, `users/${me.uid}/profile`), (s) => {
+        myProfile = s.exists() ? s.val() : null;
+        if (myProfile) newNickEl.value = myProfile.nickname || '';
+        dataReady.profile = true;
+        tryMasterRender();
       });
-
-      // 全使用者列表
-      onValue(usersRef, (snap) => {
+      onValue(ref(db, 'users'), (snap) => {
         users.clear();
         snap.forEach((u) => { const p = u.val()?.profile; if (p) users.set(u.key, p); });
-        renderUserList();
+        dataReady.users = true;
+        tryMasterRender();
       });
 
-      // 初始訊息 25 筆
-      const baseQ = query(messagesRef, orderByChild('time'), limitToLast(PAGE));
+      // 初始訊息
+      const baseQ = query(ref(db, 'messages'), orderByChild('time'), limitToLast(25));
       onChildAdded(baseQ, (snap) => addMessage(snap.key, snap.val(), false));
+      messagesBox.addEventListener('scroll', async () => { if (messagesBox.scrollTop < 20) await loadMore(); });
 
-      // 上捲載更多
-      messagesBox.addEventListener('scroll', async () => {
-        if (messagesBox.scrollTop < 20) await loadMore();
-      });
-
-      // 控制項事件
+      // 事件綁定
       sendBtn.addEventListener('click', sendMessage);
       inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }});
       logoutBtn.addEventListener('click', () => signOut(auth));
-      resendVerify.addEventListener('click', async () => { try { await sendEmailVerification(me); alert('已重新寄出驗證信。'); } catch(e) { alert('寄送失敗，稍後再試'); } });
+      resendVerify.addEventListener('click', async () => { try { await sendEmailVerification(me); alert('已重新寄出驗證信。'); } catch(e) { alert('寄送失敗'); } });
       saveNickBtn.addEventListener('click', changeNickname);
-
-      refreshControls();
     });
+    
+    // 統一的渲染入口，確保所有資料都載入後才執行
+    function tryMasterRender() {
+      if (Object.values(dataReady).every(Boolean)) {
+        renderUserList();
+        refreshControls();
+      }
+    }
 
     function refreshControls() {
       if (!me) return;
       const verified = !!me.emailVerified;
       verifyBanner.classList.toggle('hidden', verified);
-      banBanner.classList.toggle('hidden', !isBanned);
+      banBanner.classList.toggle('hidden', !bansSet.has(me.uid));
       const hasNick = (myProfile && myProfile.nickname);
-      const disabled = !verified || isBanned || !hasNick;
+      const disabled = !verified || bansSet.has(me.uid) || !hasNick;
       inputEl.disabled = disabled; 
       sendBtn.disabled = disabled;
+      if(disabled) {
+        inputEl.placeholder = !hasNick ? '請先設定暱稱' : (isBanned ? '您已被封鎖' : '請先驗證 Email');
+      } else {
+        inputEl.placeholder = '輸入訊息...（可 @暱稱）';
+      }
     }
 
     // ===== 發送訊息 =====
     async function sendMessage() {
       if (!me) return;
       if (!me.emailVerified) { alert('你尚未完成 Email 驗證，驗證後才可發話。'); return; }
-      if (isBanned) { alert('你已被封鎖，無法發話'); return; }
+      if (bansSet.has(me.uid)) { alert('你已被封鎖，無法發話'); return; }
       if (!myProfile?.nickname) { alert('正在載入個人資料，請稍候再試'); return; }
 
       const text = (inputEl.value || '').trim();
@@ -174,7 +153,7 @@
       const nick = myProfile.nickname;
 
       try {
-        await push(messagesRef, { uid: me.uid, text, time: Date.now(), nickname: nick });
+        await push(ref(db, 'messages'), { uid: me.uid, text, time: Date.now(), nickname: nick });
         inputEl.value = '';
       } catch {
         alert('訊息傳送失敗，請稍後再試。');
@@ -182,6 +161,9 @@
     }
 
     // ===== 讀取與渲染訊息 =====
+    const loadedKeys = new Set();
+    let oldestTime = Number.MAX_SAFE_INTEGER;
+    
     function addMessage(key, msg, prepend) {
       if (!msg || loadedKeys.has(key)) return;
       loadedKeys.add(key);
@@ -193,22 +175,14 @@
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
+      
+      const head = document.createElement('div');
+      head.className = 'bubble-head';
 
       const name = document.createElement('div');
       name.className = 'bubble-name';
       name.textContent = msg.nickname || users.get(msg.uid)?.nickname || '（已刪除用戶）';
       name.addEventListener('click', () => openUserCard(msg.uid));
-
-      const content = document.createElement('div');
-      content.className = 'bubble-text';
-      content.innerHTML = renderWithMentions(msg.text);
-
-      const time = document.createElement('div');
-      time.className = 'bubble-time';
-      time.textContent = fmt(msg.time);
-
-      const head = document.createElement('div');
-      head.className = 'bubble-head';
       head.appendChild(name);
 
       if (me && (isSelf || isAdmin)) {
@@ -221,6 +195,14 @@
         });
         head.appendChild(del);
       }
+      
+      const content = document.createElement('div');
+      content.className = 'bubble-text';
+      content.innerHTML = renderWithMentions(msg.text);
+
+      const time = document.createElement('div');
+      time.className = 'bubble-time';
+      time.textContent = fmt(new Date(msg.time));
 
       bubble.appendChild(head);
       bubble.appendChild(content);
@@ -228,36 +210,46 @@
       wrap.appendChild(bubble);
 
       if (prepend) {
+        const oldHeight = messagesBox.scrollHeight;
         messagesBox.insertBefore(wrap, messagesBox.firstChild);
+        messagesBox.scrollTop += messagesBox.scrollHeight - oldHeight;
       } else {
+        const isScrolledToBottom = messagesBox.scrollHeight - messagesBox.clientHeight <= messagesBox.scrollTop + 5;
         messagesBox.appendChild(wrap);
-        messagesBox.scrollTop = messagesBox.scrollHeight;
+        if (isScrolledToBottom) {
+          messagesBox.scrollTop = messagesBox.scrollHeight;
+        }
       }
     }
 
     async function loadMore() {
-      const moreQ = query(messagesRef, orderByChild('time'), endAt(oldestTime - 1), limitToLast(PAGE));
+      const moreQ = query(ref(db, 'messages'), orderByChild('time'), endAt(oldestTime - 1), limitToLast(25));
       const snap = await get(moreQ);
+      if (!snap.exists()) return;
       const arr = [];
       snap.forEach((child) => arr.push([child.key, child.val()]));
-      arr.forEach(([k, v]) => addMessage(k, v, true));
+      arr.reverse().forEach(([k, v]) => addMessage(k, v, true));
     }
 
     function renderWithMentions(text) {
       if (!text) return '';
-      const names = new Set(Array.from(users.values()).map(u => u.nickname));
-      return text.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
+      const names = new Set(Array.from(users.values()).map(u => u.nickname).filter(Boolean));
+      // 使用更安全的 HTML 轉義方式
+      const escapedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return escapedText.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
         return names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m;
       });
     }
 
-    // ===== 更改暱稱（唯一） =====
+    // ===== 更改暱稱 =====
     async function changeNickname() {
       if (!me) return;
       const newNick = (newNickEl.value || '').trim();
       if (newNick.length < 3 || newNick.length > 24) { alert('暱稱需 3–24 字'); return; }
       const lower = newNick.toLowerCase();
       const oldLower = (myProfile?.nicknameLower || '').toLowerCase();
+
+      if(lower === oldLower) { alert('新舊暱稱相同'); return; }
 
       try {
         const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => {
@@ -279,14 +271,14 @@
     // ===== 使用者名單與卡片 =====
     function renderUserList() {
       const arr = Array.from(users.entries()).map(([uid, p]) => ({ uid, ...p }));
-      arr.sort((a,b) => a.nickname.localeCompare(b.nickname, 'zh-Hant'));
+      arr.sort((a,b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant'));
       userListEl.innerHTML = arr.map(u => {
         const isMe = me && u.uid === me.uid;
         const isAdm = adminsSet.has(u.uid);
         const isBan = bansSet.has(u.uid);
         const classes = ['userrow', isMe ? 'me' : '', isAdm ? 'admin' : '', isBan ? 'banned' : ''].filter(Boolean).join(' ');
         const label = isAdm ? ' <span class="tag-admin">[管理員]</span>' : '';
-        return `<div class="${classes}" data-uid="${u.uid}">@${u.nickname}${label}</div>`;
+        return `<div class="${classes}" data-uid="${u.uid}">@${u.nickname || '未命名'}${label}</div>`;
       }).join('');
       userListEl.querySelectorAll('.userrow').forEach((el) => el.addEventListener('click', () => openUserCard(el.dataset.uid)));
     }
@@ -318,6 +310,14 @@
         } catch { alert('操作失敗'); }
       };
     }
+
+    function fmt(ts) {
+      if (typeof ts === 'number' && isFinite(ts)) return new Date(ts).toLocaleString();
+      const n = Number(ts);
+      if (isFinite(n)) return new Date(n).toLocaleString();
+      return '—';
+    }
+
   </script>
 </body>
 </html>

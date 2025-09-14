@@ -31,7 +31,8 @@
     const users = new Map();
     const adminsSet = new Set();
     const bansSet = new Set();
-
+    
+    let wasAdminOnLoad = false;
     let initialDataLoaded = { admins: false, bans: false, users: false };
 
     onAuthStateChanged(auth, async (u) => {
@@ -45,6 +46,7 @@
           location.href = 'chat.html';
           return;
         }
+        wasAdminOnLoad = true;
         initializeListeners();
       } catch (error) {
         alert('權限檢查失敗，請稍後再試。');
@@ -57,7 +59,7 @@
         adminsSet.clear();
         snap.forEach(ch => adminsSet.add(ch.key));
         initialDataLoaded.admins = true;
-        if (!adminsSet.has(me.uid) && initialDataLoaded.users) { // 檢查是否中途被拔權限
+        if (wasAdminOnLoad && !adminsSet.has(me.uid) && initialDataLoaded.users) {
              alert('你的管理員權限已被移除。');
              location.href = 'chat.html';
              return;
@@ -78,19 +80,13 @@
         initialDataLoaded.users = true;
         tryRebuild();
       });
-
-      listBox.addEventListener('scroll', handleScroll);
     }
     
     function tryRebuild() {
-      // 確保所有初始資料都已載入，才執行第一次渲染
       if (Object.values(initialDataLoaded).every(Boolean)) {
         rebuild();
       }
     }
-
-    let normalSorted = [];
-    let normalRendered = 0;
 
     function rebuild() {
       const admins = [], banned = [], normal = [];
@@ -102,14 +98,13 @@
       });
       const cmp = (a, b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant');
       admins.sort(cmp); banned.sort(cmp); normal.sort(cmp);
+      
+      const adminHtml = sectionHtml('---管理員---', admins);
+      const bannedHtml = sectionHtml('---封鎖成員---', banned);
+      const normalHtml = sectionHtml('---普通成員---', normal);
 
-      normalSorted = normal;
-      normalRendered = 0;
-
-      listBox.innerHTML = sectionHtml('---管理員---', admins) +
-                          sectionHtml('---封鎖成員---', banned) +
-                          `<div class="section-title">---普通成員---</div><div id="normalList"></div>`;
-      renderMore();
+      listBox.innerHTML = adminHtml + bannedHtml + normalHtml;
+      bindAllEvents();
     }
 
     function sectionHtml(title, arr) {
@@ -123,12 +118,12 @@
       const isSelf = u.uid === me.uid;
       
       let manageButtons = '';
-      if (!isSelf) { // 不能對自己操作
+      if (!isSelf) {
         if (isAdm) {
-          manageButtons += `<button class="danger demote-btn" data-uid="${u.uid}">移除管理員</button>`;
+          manageButtons += `<button class="danger demote-btn">移除管理員</button>`;
         } else {
-          manageButtons += `<button class="promote-btn" data-uid="${u.uid}">設為管理員</button>`;
-          manageButtons += `<button class="${isBan ? '' : 'danger'} ban-btn" data-uid="${u.uid}" data-banned="${isBan}">${isBan ? '解封鎖' : '封鎖'}</button>`;
+          manageButtons += `<button class="promote-btn">設為管理員</button>`;
+          manageButtons += `<button class="${isBan ? '' : 'danger'} ban-btn" data-banned="${isBan}">${isBan ? '解封鎖' : '封鎖'}</button>`;
         }
       }
 
@@ -147,64 +142,57 @@
         </div>`;
     }
     
-    function renderMore() {
-      const list = document.getElementById('normalList');
-      if (!list) return;
-      const next = normalSorted.slice(normalRendered, normalRendered + 25);
-      list.insertAdjacentHTML('beforeend', next.map(rowHtml).join(''));
-      normalRendered += next.length;
-      bindRowEvents(list); 
-    }
-    
-    function handleScroll() {
-        if (listBox.scrollTop + listBox.clientHeight >= listBox.scrollHeight - 20) {
-          renderMore();
-        }
-    }
-    
-    // 使用事件委派來處理所有按鈕點擊，更有效率
-    listBox.addEventListener('click', async (e) => {
-        const target = e.target;
-        const row = target.closest('.member-row');
-        if (!row) return;
-        const uid = row.dataset.uid;
+    let eventsBound = false;
+    function bindAllEvents() {
+        if (eventsBound) return;
+        eventsBound = true;
+        
+        listBox.addEventListener('click', async (e) => {
+            const target = e.target;
+            const row = target.closest('.member-row');
+            if (!row) return;
+            const uid = row.dataset.uid;
 
-        if (target.classList.contains('toggle')) {
-            const body = row.querySelector('.member-body');
-            body.classList.toggle('hidden');
-            if (!body.classList.contains('hidden')) {
-                const el = row.querySelector('.email');
-                if (el.textContent === '（點上方▼載入）') { // 防止重複載入
-                    try {
-                        const snap = await get(ref(db, `users/${uid}/private/email`));
-                        el.textContent = snap.exists() ? snap.val() : '（無）';
-                    } catch { el.textContent = '（讀取失敗）'; }
+            if (target.classList.contains('toggle')) {
+                const body = row.querySelector('.member-body');
+                body.classList.toggle('hidden');
+                if (!body.classList.contains('hidden')) {
+                    const el = row.querySelector('.email');
+                    if (el.textContent === '（點上方▼載入）') {
+                        try {
+                            const snap = await get(ref(db, `users/${uid}/private/email`));
+                            el.textContent = snap.exists() ? snap.val() : '（無）';
+                        } catch { el.textContent = '（讀取失敗）'; }
+                    }
                 }
+            } else if (target.classList.contains('ban-btn')) {
+                const isBanned = target.dataset.banned === 'true';
+                if (!confirm(isBanned ? '確定要解封？' : '確定要封鎖？')) return;
+                try {
+                    if (isBanned) await remove(ref(db, `bans/${uid}`));
+                    else await set(ref(db, `bans/${uid}`), true);
+                } catch (err) { alert('操作失敗'); }
+            } else if (target.classList.contains('promote-btn')) {
+                if (!confirm(`確定要將 ${users.get(uid)?.nickname} 設為管理員？`)) return;
+                try {
+                    await set(ref(db, `admins/${uid}`), true);
+                } catch (err) { alert('操作失敗'); }
+            } else if (target.classList.contains('demote-btn')) {
+                if (!confirm(`確定要移除 ${users.get(uid)?.nickname} 的管理員權限？`)) return;
+                try {
+                    await remove(ref(db, `admins/${uid}`));
+                } catch (err) { alert('操作失敗'); }
             }
-        } else if (target.classList.contains('ban-btn')) {
-            const isBanned = target.dataset.banned === 'true';
-            if (!confirm(isBanned ? '確定要解封？' : '確定要封鎖？')) return;
-            try {
-                if (isBanned) await remove(ref(db, `bans/${uid}`));
-                else await set(ref(db, `bans/${uid}`), true);
-            } catch (err) { alert('操作失敗'); }
-        } else if (target.classList.contains('promote-btn')) {
-            if (!confirm(`確定要將 ${users.get(uid)?.nickname} 設為管理員？`)) return;
-            try {
-                await set(ref(db, `admins/${uid}`), true);
-            } catch (err) { alert('操作失敗'); }
-        } else if (target.classList.contains('demote-btn')) {
-            if (!confirm(`確定要移除 ${users.get(uid)?.nickname} 的管理員權限？`)) return;
-            try {
-                await remove(ref(db, `admins/${uid}`));
-            } catch (err) { alert('操作失敗'); }
-        }
-    });
-
+        });
+    }
+    
     function fmt(ts) {
       if (typeof ts === 'number' && isFinite(ts)) return new Date(ts).toLocaleString();
+      const n = Number(ts);
+      if (isFinite(n)) return new Date(n).toLocaleString();
       return '—';
     }
+
   </script>
 </body>
 </html>
