@@ -26,9 +26,10 @@
     document.getElementById('toChat').onclick = () => (location.href = 'chat.html');
 
     let me = null;
-    const users = new Map();     // uid -> profile
-    const adminsSet = new Set(); // uid
-    const bansSet   = new Set(); // uid
+    const users = new Map();
+    const adminsSet = new Set();
+    const bansSet   = new Set();
+    let isInitialAdminLoad = true; // ★ 修正點：新增一個旗標，用於區分初次載入和後續更新
 
     const PAGE = 25;
     let normalSorted = [];
@@ -37,22 +38,48 @@
     onAuthStateChanged(auth, async (u) => {
       if (!u) return (location.href = 'login.html');
       me = u;
+      
+      // 初始權限檢查：這部分邏輯是正確的
+      try {
+        const adminSnap = await get(ref(db, 'admins'));
+        if (!adminSnap.exists() || !adminSnap.hasChild(me.uid)) {
+          alert('你不是管理員，無法進入此頁面。');
+          location.href = 'chat.html';
+          return;
+        }
+        
+        // 權限通過，載入頁面
+        initialLoad();
 
-      // ★ 修改點：合併監聽器，並加入即時權限檢查
+      } catch (error) {
+        alert('檢查權限時發生錯誤，請稍後再試。');
+        location.href = 'chat.html';
+      }
+    });
+
+    function initialLoad() {
+      // 監聽 admins 節點
       onValue(ref(db, 'admins'), (snap) => {
         adminsSet.clear();
         snap.forEach(ch => adminsSet.add(ch.key));
-        
-        // 即時檢查權限，若被拔除則踢回聊天室
-        if (!adminsSet.has(me.uid)) {
-          alert('你的管理員權限已被移除');
-          location.href = 'chat.html';
-          return; // 停止後續渲染
-        }
-        rebuild();
-      });
 
-      // 訂閱封鎖與使用者列表
+        // ★ 修正點：使用旗標來區分
+        if (isInitialAdminLoad) {
+          // 這是第一次執行，因為 get() 已經確認過權限，所以直接繼續
+          isInitialAdminLoad = false;
+        } else {
+          // 這不是第一次執行，表示 admins 列表發生了變化
+          // 此時才需要檢查權限是否被移除
+          if (!adminsSet.has(me.uid)) {
+            alert('你的管理員權限已被移除。');
+            location.href = 'chat.html';
+            return; // 權限沒了，不用再繼續執行
+          }
+        }
+        rebuild(); // 重建列表
+      });
+      
+      // 監聽 bans 和 users (這部分不變)
       onValue(ref(db, 'bans'),   (snap) => { bansSet.clear();   snap.forEach(ch => bansSet.add(ch.key));   rebuild(); });
       onValue(ref(db, 'users'),  (snap) => {
         users.clear();
@@ -65,10 +92,11 @@
           renderMore();
         }
       });
-    });
+    }
 
     function rebuild() {
-      // 分組排序
+      if (!me || users.size === 0) return;
+
       const admins = [], banned = [], normal = [];
       users.forEach((p, uid) => {
         const rec = { uid, ...p };
@@ -82,17 +110,14 @@
       normalSorted = normal;
       normalRendered = 0;
 
-      // 先渲染管理員與封鎖者全量，普通成員前 25
-      listBox.innerHTML = sectionHtml('---管理員---', admins, true) +
-                          sectionHtml('---封鎖成員---', banned, true) +
+      listBox.innerHTML = sectionHtml('---管理員---', admins) +
+                          sectionHtml('---封鎖成員---', banned) +
                           `<div class="section-title">---普通成員---</div><div id="normalList"></div>`;
-      renderMore(); // 普通成員前 25
-
-      // 綁定展開＆按鈕事件
+      renderMore();
       bindRowEvents(listBox);
     }
 
-    function sectionHtml(title, arr, full) {
+    function sectionHtml(title, arr) {
       const rows = arr.map(rowHtml).join('') || '<div class="empty">（無）</div>';
       return `<div class="section-title">${title}</div>${rows}`;
     }
@@ -112,7 +137,7 @@
             <div>電子郵件：<span class="email" data-uid="${u.uid}">（點上方▼載入）</span></div>
             <div>註冊時間：${fmt(u.registeredAt)}</div>
             <div style="margin-top:8px">
-              ${isAdm ? '' : `<button class="${isBan?'':'danger'} ban-btn">${isBan?'解封鎖':'封鎖'}</button>`}
+              ${u.uid === me.uid || isAdm ? '' : `<button class="${isBan?'':'danger'} ban-btn">${isBan?'解封鎖':'封鎖'}</button>`}
             </div>
           </div>
         </div>`;
@@ -122,20 +147,24 @@
       const list = document.getElementById('normalList');
       if (!list) return;
       const next = normalSorted.slice(normalRendered, normalRendered + PAGE);
-      if (next.length === 0) return;
-      list.insertAdjacentHTML('beforeend', next.map(rowHtml).join(''));
-      normalRendered += next.length;
-      bindRowEvents(list);
+      if (next.length === 0 && normalRendered === 0) {
+        list.innerHTML = '<div class="empty">（無）</div>';
+      } else {
+        list.insertAdjacentHTML('beforeend', next.map(rowHtml).join(''));
+        normalRendered += next.length;
+        bindRowEvents(list);
+      }
     }
 
     function bindRowEvents(root) {
       root.querySelectorAll('.member-row .toggle').forEach(btn => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = 'true';
         btn.onclick = async (e) => {
           const row = e.currentTarget.closest('.member-row');
           const body = row.querySelector('.member-body');
           body.classList.toggle('hidden');
           if (!body.classList.contains('hidden')) {
-            // 載入 email
             const uid = row.dataset.uid;
             const el = row.querySelector('.email');
             try {
@@ -146,6 +175,8 @@
         };
       });
       root.querySelectorAll('.member-row .ban-btn').forEach(btn => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = 'true';
         btn.onclick = async (e) => {
           const row = e.currentTarget.closest('.member-row');
           const uid = row.dataset.uid;
