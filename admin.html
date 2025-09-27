@@ -21,7 +21,7 @@
   <script type="module">
     import { auth, db } from './firebase.js';
     import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, onValue, get, set, remove } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref, get, set, remove, onChildAdded, onChildChanged, onChildRemoved } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     const listBox = document.getElementById('listBox');
     document.getElementById('toChat').onclick = () => (location.href = 'chat.html');
@@ -32,15 +32,6 @@
       admins: new Set(),
       bans: new Set(),
     };
-    
-    // --- 同步閘門 ---
-    const dataReady = { users: false, admins: false, bans: false };
-    let initialCheckPassed = false;
-    function checkAllDataReady() {
-        if (initialCheckPassed && Object.values(dataReady).every(Boolean)) {
-            updateAndRender(); // 首次渲染
-        }
-    }
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) return (location.href = 'login.html');
@@ -51,53 +42,59 @@
         alert('你沒有權限，無法進入此頁面。');
         return (location.href = 'chat.html');
       }
-      
-      initialCheckPassed = true; // 初步權限檢查通過
+
+      // Clear previous state and initialize listeners for real-time updates
+      appState.users.clear();
+      appState.admins.clear();
+      appState.bans.clear();
       initializeListeners();
     });
 
     function initializeListeners() {
-        onValue(ref(db, 'users'), (snap) => {
-            appState.users.clear();
-            snap.forEach(u => {
-                const p = u.val()?.profile;
-                if (p) appState.users.set(u.key, { uid: u.key, ...p });
-            });
-            if (!dataReady.users) {
-                dataReady.users = true;
-                checkAllDataReady();
-            } else {
-                updateAndRender();
-            }
+        // --- Users Listeners ---
+        const usersRef = ref(db, 'users');
+        onChildAdded(usersRef, (snap) => {
+            const p = snap.val()?.profile;
+            if (p) appState.users.set(snap.key, { uid: snap.key, ...p });
+            updateAndRender();
+        });
+        onChildChanged(usersRef, (snap) => {
+            const p = snap.val()?.profile;
+            if (p) appState.users.set(snap.key, { uid: snap.key, ...p });
+            updateAndRender();
+        });
+        onChildRemoved(usersRef, (snap) => {
+            appState.users.delete(snap.key);
+            updateAndRender();
         });
 
-        onValue(ref(db, 'admins'), (snap) => {
-            appState.admins.clear();
-            snap.forEach(ch => { if (ch.val() === true) appState.admins.add(ch.key); });
-            if (!dataReady.admins) {
-                dataReady.admins = true;
-                checkAllDataReady();
-            } else {
-                updateAndRender();
-            }
+        // --- Admins Listeners ---
+        const adminsRef = ref(db, 'admins');
+        onChildAdded(adminsRef, (snap) => {
+            if (snap.val() === true) appState.admins.add(snap.key);
+            updateAndRender();
+        });
+        onChildRemoved(adminsRef, (snap) => {
+            appState.admins.delete(snap.key);
+            updateAndRender();
         });
 
-        onValue(ref(db, 'bans'), (snap) => {
-            appState.bans.clear();
-            snap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
-            if (!dataReady.bans) {
-                dataReady.bans = true;
-                checkAllDataReady();
-            } else {
-                updateAndRender();
-            }
+        // --- Bans Listeners ---
+        const bansRef = ref(db, 'bans');
+        onChildAdded(bansRef, (snap) => {
+            if (snap.val() === true) appState.bans.add(snap.key);
+            updateAndRender();
+        });
+        onChildRemoved(bansRef, (snap) => {
+            appState.bans.delete(snap.key);
+            updateAndRender();
         });
     }
 
     function updateAndRender() {
-        if (!initialCheckPassed || !Object.values(dataReady).every(Boolean)) return;
-        
-        // 權限移除檢查
+        if (!appState.currentUser) return;
+
+        // Re-check permission in case it was revoked
         if (!appState.admins.has(appState.currentUser.uid)) {
             alert('你的管理員權限已被移除。');
             location.href = 'chat.html';
@@ -105,7 +102,7 @@
         }
         renderAdminList();
     }
-    
+
     function renderAdminList() {
         const { users, admins, bans } = appState;
         const adminsList = [], bannedList = [], normalList = [];
@@ -182,7 +179,7 @@
                     emailEl.textContent = snap.val() || '（無）';
                 }
             }
-        } 
+        }
         else if (target.matches('.promote-btn, .demote-btn, .ban-btn')) {
             handleAdminAction(target, uid, user.nickname);
         }
