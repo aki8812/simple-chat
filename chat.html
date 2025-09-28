@@ -25,7 +25,7 @@
       <header class="topbar">
         <div class="left">
           <div id="verifyBanner" class="banner hidden">
-            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >  
+            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
@@ -133,7 +133,7 @@
         snap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
         updateAndRenderUI();
       });
-      
+
       const newMessagesQuery = query(ref(db, 'messages'), orderByChild('time'), startAt(appState.latestMessageTime + 1));
       onChildAdded(newMessagesQuery, (snap) => {
           if (appState.messages.has(snap.key)) return;
@@ -148,7 +148,7 @@
         const serverMessages = snapshot.val() || {};
         const serverKeys = new Set(Object.keys(serverMessages));
         const localKeys = Array.from(appState.messages.keys());
-        
+
         localKeys.forEach(localKey => {
             if (!serverKeys.has(localKey)) {
                 appState.messages.delete(localKey);
@@ -166,7 +166,7 @@
       renderUserList();
       renderAllMessages();
     }
-    
+
     function renderControls() {
         const { currentUser, admins, bans, users } = appState;
         const myProfile = users.get(currentUser.uid);
@@ -178,14 +178,14 @@
         elements.verifyBanner.classList.toggle('hidden', isVerified);
         elements.banBanner.classList.toggle('hidden', !isBanned);
         elements.adminPanel.classList.toggle('hidden', !isAdmin);
-        
+
         const isDisabled = !isVerified || isBanned || !hasNick;
         elements.inputEl.disabled = isDisabled;
         elements.sendBtn.disabled = isDisabled;
         elements.inputEl.placeholder = isDisabled
             ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
             : '輸入訊息...（可 @暱稱）';
-            
+
         if(myProfile) elements.newNickEl.value = myProfile.nickname || '';
     }
 
@@ -193,7 +193,7 @@
         const { currentUser, users, admins, bans } = appState;
         const userArray = Array.from(users.values());
         userArray.sort((a, b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant'));
-        
+
         const html = userArray.map(u => {
             const isMe = currentUser.uid === u.uid;
             const isAdmin = admins.has(u.uid);
@@ -205,7 +205,7 @@
 
         elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
     }
-    
+
     function renderAllMessages() {
         const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
         elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
@@ -215,7 +215,7 @@
     async function loadInitialMessages() {
         const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(30));
         const initialSnap = await get(msgQuery);
-        
+
         if (initialSnap.exists()) {
             let maxTime = 0;
             initialSnap.forEach(snap => {
@@ -238,10 +238,16 @@
         const wrap = document.createElement('div');
         wrap.className = `chat-message ${isSelf ? 'self' : 'other'}`;
         wrap.dataset.msgId = key;
-        
+
+        // 檢查是否提及自己
+        const myNick = users.get(currentUser.uid)?.nickname;
+        if (myNick && msg.text.includes(`@${myNick}`) && !isSelf) {
+            wrap.classList.add('mention-me');
+        }
+
         const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
         const authorName = users.get(msg.uid)?.nickname || msg.nickname || '...';
-        
+
         wrap.innerHTML = `
         <div class="bubble">
             <div class="bubble-head">
@@ -274,10 +280,10 @@
       elements.brandBtn.onclick = () => location.reload();
       elements.manageBtn.onclick = () => window.location.href = 'admin.html';
       elements.resendVerify.onclick = async () => {
-          try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); } 
+          try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); }
           catch { alert('寄送太頻繁，請稍後再試。'); }
       };
-      
+
       elements.userListContainer.addEventListener('click', e => {
         const target = e.target.closest('.userrow');
         if(target) openUserCard(target.dataset.uid);
@@ -321,7 +327,7 @@
         const isMe = currentUser.uid === uid;
         const isCurrentUserAdmin = admins.has(currentUser.uid);
         const canManage = isCurrentUserAdmin && !isMe;
-        
+
         const isTargetBanned = bans.has(uid);
         const isTargetAdmin = admins.has(uid);
 
@@ -330,7 +336,7 @@
             adminButtonHtml = `<button id="promoteBtn" class="${isTargetAdmin ? 'danger' : 'promote'}">${isTargetAdmin ? '移除管理員' : '設為管理員'}</button>`;
         }
 
-        const banButtonHtml = canManage 
+        const banButtonHtml = canManage
             ? `<button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button>`
             : '';
 
@@ -345,20 +351,20 @@
           </div>
         </div>`;
         elements.userCard.classList.remove('hidden');
-        
+
         const closeBtn = document.getElementById('closeCard');
         if (closeBtn) closeBtn.onclick = () => elements.userCard.classList.add('hidden');
-        
+
         const banBtn = document.getElementById('banBtn');
         if (banBtn) banBtn.onclick = async () => {
           if (!confirm(isTargetBanned ? '確定要解封？' : '確定封鎖此用戶？')) return;
           const targetRef = ref(db, `bans/${uid}`);
-          try { 
+          try {
             await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
             elements.userCard.classList.add('hidden');
           } catch { alert('操作失敗'); }
         };
-        
+
         const promoteBtn = document.getElementById('promoteBtn');
         if (promoteBtn) {
             promoteBtn.onclick = async () => {
@@ -377,11 +383,11 @@
         if (!text) return '';
         const names = new Set(Array.from(appState.users.values()).map(u => u.nickname).filter(Boolean));
         const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => 
+        return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) =>
             names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m
         );
     }
-    
+
     function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
   </script>
 </body>
