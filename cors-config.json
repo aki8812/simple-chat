@@ -1,0 +1,15 @@
+[
+  {
+    "origin": [
+      "https://simple-chat.org",
+      "http://localhost:8080",
+      "http://127.0.0.1:8080"
+    ],
+    "method": ["GET", "POST", "PUT", "HEAD"],
+    "responseHeader": [
+      "Content-Type",
+      "Access-Control-Allow-Origin"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
