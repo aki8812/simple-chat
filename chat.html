@@ -265,18 +265,16 @@
         const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
         const authorName = users.get(msg.uid)?.nickname || msg.nickname || '...';
 
-        let textContent = '';
+        let contentHtml = '';
         if (msg.text) {
-            textContent = `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`;
+            contentHtml += `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`;
         }
-
-        let fileContent = '';
         if (msg.file) {
             const f = msg.file;
             if (f.type.startsWith('image/')) {
-                fileContent = `<img src="${f.url}" alt="${f.name}" class="preview-img" />`;
+                contentHtml += `<img src="${f.url}" alt="${f.name}" class="preview-img" />`;
             } else {
-                fileContent = `
+                contentHtml += `
                 <a href="${f.url}" target="_blank" class="file-attachment" download="${f.name}">
                     <div class="icon">📄</div>
                     <div class="info">
@@ -285,8 +283,6 @@
                     </div>
                 </a>`;
             }
-            // If there's a file, wrap it inside bubble-text
-            textContent += `<div class="bubble-text">${fileContent}</div>`;
         }
 
         wrap.innerHTML = `
@@ -295,7 +291,7 @@
                 <div class="bubble-name" data-uid="${msg.uid}">${authorName}</div>
                 ${deleteBtnHtml}
             </div>
-            ${textContent}
+            ${contentHtml}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
         return wrap;
@@ -374,7 +370,6 @@
           const msg = appState.messages.get(key);
           if (confirm('確定要刪除此訊息？')) {
             remove(dbRef(db, `messages/${key}`)).catch(() => alert('刪除失敗'));
-            // If message had a file, delete it from storage
             if (msg && msg.file && msg.file.path) {
                 deleteObject(storageRef(storage, msg.file.path)).catch(err => console.error("檔案刪除失敗", err));
             }
@@ -387,6 +382,13 @@
 
       elements.attachBtn.onclick = () => elements.fileInput.click();
       elements.fileInput.onchange = handleFileSelection;
+
+      // 使用事件委派處理檔案預覽的移除
+      elements.filePreview.addEventListener('click', (e) => {
+        if (e.target.classList.contains('remove-file')) {
+          removeSelectedFile();
+        }
+      });
     }
 
     function handleFileSelection(event) {
@@ -416,7 +418,6 @@
                 <span>${appState.fileToSend.name} (${formatBytes(appState.fileToSend.size)})</span>
                 <span class="remove-file" title="移除檔案">×</span>
             `;
-            elements.filePreview.querySelector('.remove-file').onclick = removeSelectedFile;
             elements.filePreview.classList.remove('hidden');
         } else {
             elements.filePreview.classList.add('hidden');
@@ -490,7 +491,7 @@
         if (promoteBtn) {
             promoteBtn.onclick = async () => {
                 const actionText = isTargetAdmin ? '移除其管理員權限' : '將其設為管理員';
-                if (!confirm(`確定要${actionTactionText}？`)) return;
+                if (!confirm(`確定要${actionText}？`)) return;
                 const targetRef = dbRef(db, `admins/${uid}`);
                 try {
                     await (isTargetAdmin ? remove(targetRef) : set(targetRef, true));
