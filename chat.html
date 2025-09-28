@@ -25,7 +25,7 @@
       <header class="topbar">
         <div class="left">
           <div id="verifyBanner" class="banner hidden">
-            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >
+            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >  
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
@@ -40,12 +40,7 @@
       <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
 
       <div class="input-area">
-        <button id="attachBtn" title="附加檔案">+</button>
-        <input type="file" id="fileInput" class="hidden" />
-        <div class="input-main">
-          <div id="filePreview" class="file-preview hidden"></div>
-          <input type="text" id="messageInput" placeholder="載入中..." autocomplete="off" disabled />
-        </div>
+        <input type="text" id="messageInput" placeholder="載入中..." autocomplete="off" disabled />
         <button id="sendBtn" type="button" disabled>送出</button>
       </div>
     </main>
@@ -54,10 +49,9 @@
   <div id="userCard" class="popup hidden"></div>
 
   <script type="module">
-    import { auth, db, storage } from './firebase.js';
+    import { auth, db } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref as dbRef, push, onChildAdded, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
-    import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js';
+    import { ref, push, onChildAdded, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     const elements = {
       messagesBox: document.getElementById('messages'),
@@ -74,9 +68,6 @@
       brandBtn: document.getElementById('brandBtn'),
       adminPanel: document.getElementById('adminPanel'),
       manageBtn: document.getElementById('manageBtn'),
-      attachBtn: document.getElementById('attachBtn'),
-      fileInput: document.getElementById('fileInput'),
-      filePreview: document.getElementById('filePreview'),
     };
 
     const appState = {
@@ -86,11 +77,7 @@
       bans: new Set(),
       messages: new Map(),
       latestMessageTime: 0,
-      fileToSend: null,
-      isUploading: false,
     };
-
-    const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) return window.location.href = 'login.html';
@@ -102,9 +89,9 @@
     async function initializeApp() {
       try {
         const [usersSnap, adminsSnap, bansSnap] = await Promise.all([
-          get(dbRef(db, 'users')),
-          get(dbRef(db, 'admins')),
-          get(dbRef(db, 'bans')),
+          get(ref(db, 'users')),
+          get(ref(db, 'admins')),
+          get(ref(db, 'bans')),
         ]);
 
         usersSnap.forEach(u => {
@@ -126,7 +113,7 @@
     }
 
     function attachRealtimeListeners() {
-      onValue(dbRef(db, 'users'), (snap) => {
+      onValue(ref(db, 'users'), (snap) => {
         appState.users.clear();
         snap.forEach(u => {
           const p = u.val()?.profile;
@@ -135,19 +122,19 @@
         updateAndRenderUI();
       });
 
-      onValue(dbRef(db, 'admins'), (snap) => {
+      onValue(ref(db, 'admins'), (snap) => {
         appState.admins.clear();
         snap.forEach(ch => { if (ch.val() === true) appState.admins.add(ch.key); });
         updateAndRenderUI();
       });
 
-      onValue(dbRef(db, 'bans'), (snap) => {
+      onValue(ref(db, 'bans'), (snap) => {
         appState.bans.clear();
         snap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
         updateAndRenderUI();
       });
-
-      const newMessagesQuery = query(dbRef(db, 'messages'), orderByChild('time'), startAt(appState.latestMessageTime + 1));
+      
+      const newMessagesQuery = query(ref(db, 'messages'), orderByChild('time'), startAt(appState.latestMessageTime + 1));
       onChildAdded(newMessagesQuery, (snap) => {
           if (appState.messages.has(snap.key)) return;
           const msg = snap.val();
@@ -157,11 +144,11 @@
           elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
       });
 
-      onValue(dbRef(db, 'messages'), (snapshot) => {
+      onValue(ref(db, 'messages'), (snapshot) => {
         const serverMessages = snapshot.val() || {};
         const serverKeys = new Set(Object.keys(serverMessages));
         const localKeys = Array.from(appState.messages.keys());
-
+        
         localKeys.forEach(localKey => {
             if (!serverKeys.has(localKey)) {
                 appState.messages.delete(localKey);
@@ -179,33 +166,26 @@
       renderUserList();
       renderAllMessages();
     }
-
+    
     function renderControls() {
-        const { currentUser, admins, bans, users, isUploading, fileToSend } = appState;
+        const { currentUser, admins, bans, users } = appState;
         const myProfile = users.get(currentUser.uid);
         const isVerified = !!currentUser.emailVerified;
         const isBanned = bans.has(currentUser.uid);
         const hasNick = myProfile && myProfile.nickname;
+        const isAdmin = admins.has(currentUser.uid);
 
         elements.verifyBanner.classList.toggle('hidden', isVerified);
         elements.banBanner.classList.toggle('hidden', !isBanned);
-        elements.adminPanel.classList.toggle('hidden', !admins.has(currentUser.uid));
-
-        const canPost = isVerified && !isBanned && hasNick;
-        const isInputEmpty = !elements.inputEl.value.trim() && !fileToSend;
-
-        elements.inputEl.disabled = !canPost || isUploading;
-        elements.attachBtn.disabled = !canPost || isUploading;
-        elements.sendBtn.disabled = !canPost || isUploading || isInputEmpty;
-
-        if (isUploading) {
-            elements.inputEl.placeholder = '檔案上傳中...';
-        } else if (!canPost) {
-            elements.inputEl.placeholder = isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱');
-        } else {
-            elements.inputEl.placeholder = '輸入訊息...（可 @暱稱）';
-        }
-
+        elements.adminPanel.classList.toggle('hidden', !isAdmin);
+        
+        const isDisabled = !isVerified || isBanned || !hasNick;
+        elements.inputEl.disabled = isDisabled;
+        elements.sendBtn.disabled = isDisabled;
+        elements.inputEl.placeholder = isDisabled
+            ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
+            : '輸入訊息...（可 @暱稱）';
+            
         if(myProfile) elements.newNickEl.value = myProfile.nickname || '';
     }
 
@@ -213,7 +193,7 @@
         const { currentUser, users, admins, bans } = appState;
         const userArray = Array.from(users.values());
         userArray.sort((a, b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant'));
-
+        
         const html = userArray.map(u => {
             const isMe = currentUser.uid === u.uid;
             const isAdmin = admins.has(u.uid);
@@ -225,7 +205,7 @@
 
         elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
     }
-
+    
     function renderAllMessages() {
         const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
         elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
@@ -233,15 +213,17 @@
     }
 
     async function loadInitialMessages() {
-        const msgQuery = query(dbRef(db, 'messages'), orderByChild('time'), limitToLast(30));
+        const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(30));
         const initialSnap = await get(msgQuery);
-
+        
         if (initialSnap.exists()) {
             let maxTime = 0;
             initialSnap.forEach(snap => {
                 const msg = snap.val();
                 appState.messages.set(snap.key, msg);
-                if (msg.time > maxTime) maxTime = msg.time;
+                if (msg.time > maxTime) {
+                    maxTime = msg.time;
+                }
             });
             appState.latestMessageTime = maxTime;
         }
@@ -256,42 +238,17 @@
         const wrap = document.createElement('div');
         wrap.className = `chat-message ${isSelf ? 'self' : 'other'}`;
         wrap.dataset.msgId = key;
-
-        const myNick = users.get(currentUser.uid)?.nickname;
-        if (myNick && msg.text && msg.text.includes(`@${myNick}`) && !isSelf) {
-            wrap.classList.add('mention-me');
-        }
-
+        
         const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
         const authorName = users.get(msg.uid)?.nickname || msg.nickname || '...';
-
-        let contentHtml = '';
-        if (msg.text) {
-            contentHtml += `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`;
-        }
-        if (msg.file) {
-            const f = msg.file;
-            if (f.type.startsWith('image/')) {
-                contentHtml += `<img src="${f.url}" alt="${f.name}" class="preview-img" />`;
-            } else {
-                contentHtml += `
-                <a href="${f.url}" target="_blank" class="file-attachment" download="${f.name}">
-                    <div class="icon">📄</div>
-                    <div class="info">
-                        <div class="name">${f.name}</div>
-                        <div class="size">${formatBytes(f.size)}</div>
-                    </div>
-                </a>`;
-            }
-        }
-
+        
         wrap.innerHTML = `
         <div class="bubble">
             <div class="bubble-head">
                 <div class="bubble-name" data-uid="${msg.uid}">${authorName}</div>
                 ${deleteBtnHtml}
             </div>
-            ${contentHtml}
+            <div class="bubble-text">${renderWithMentions(msg.text)}</div>
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
         return wrap;
@@ -299,66 +256,28 @@
 
     async function sendMessage() {
       const text = elements.inputEl.value.trim();
-      const file = appState.fileToSend;
-      if (!text && !file) return;
-
+      if (!text) return;
       const myProfile = appState.users.get(appState.currentUser.uid);
-      appState.isUploading = true;
-      renderControls();
-
       try {
-        let fileData = null;
-        if (file) {
-          const filePath = `${appState.currentUser.uid}/${Date.now()}_${file.name}`;
-          const sRef = storageRef(storage, filePath);
-          const uploadResult = await uploadBytes(sRef, file);
-          const downloadURL = await getDownloadURL(uploadResult.ref);
-          fileData = {
-            url: downloadURL,
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            path: filePath,
-          };
-        }
-
-        await push(dbRef(db, 'messages'), {
-          uid: appState.currentUser.uid,
-          nickname: myProfile.nickname,
-          text: text,
-          time: Date.now(),
-          file: fileData,
+        await push(ref(db, 'messages'), {
+          uid: appState.currentUser.uid, text, time: Date.now(), nickname: myProfile.nickname,
         });
-
         elements.inputEl.value = '';
-        removeSelectedFile();
-      } catch (error) {
-        console.error("傳送失敗:", error);
-        alert('訊息或檔案傳送失敗。');
-      } finally {
-        appState.isUploading = false;
-        renderControls();
-      }
+      } catch { alert('訊息傳送失敗。'); }
     }
 
     function setupEventListeners() {
       elements.sendBtn.onclick = sendMessage;
-      elements.inputEl.onkeydown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-      };
-      elements.inputEl.oninput = renderControls;
+      elements.inputEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }};
       elements.logoutBtn.onclick = () => signOut(auth);
       elements.saveNickBtn.onclick = changeNickname;
       elements.brandBtn.onclick = () => location.reload();
       elements.manageBtn.onclick = () => window.location.href = 'admin.html';
       elements.resendVerify.onclick = async () => {
-          try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); }
+          try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); } 
           catch { alert('寄送太頻繁，請稍後再試。'); }
       };
-
+      
       elements.userListContainer.addEventListener('click', e => {
         const target = e.target.closest('.userrow');
         if(target) openUserCard(target.dataset.uid);
@@ -367,61 +286,14 @@
       elements.messagesBox.addEventListener('click', e => {
         if (e.target.classList.contains('del-btn')) {
           const key = e.target.dataset.key;
-          const msg = appState.messages.get(key);
           if (confirm('確定要刪除此訊息？')) {
-            remove(dbRef(db, `messages/${key}`)).catch(() => alert('刪除失敗'));
-            if (msg && msg.file && msg.file.path) {
-                deleteObject(storageRef(storage, msg.file.path)).catch(err => console.error("檔案刪除失敗", err));
-            }
+            remove(ref(db, `messages/${key}`)).catch(() => alert('刪除失敗'));
           }
         }
         if (e.target.classList.contains('bubble-name')) {
           openUserCard(e.target.dataset.uid);
         }
       });
-
-      elements.attachBtn.onclick = () => elements.fileInput.click();
-      elements.fileInput.onchange = handleFileSelection;
-
-      // 使用事件委派處理檔案預覽的移除
-      elements.filePreview.addEventListener('click', (e) => {
-        if (e.target.classList.contains('remove-file')) {
-          removeSelectedFile();
-        }
-      });
-    }
-
-    function handleFileSelection(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        if (file.size > MAX_FILE_SIZE) {
-            alert(`檔案大小不可超過 ${formatBytes(MAX_FILE_SIZE)}`);
-            elements.fileInput.value = ''; // Clear selection
-            return;
-        }
-        appState.fileToSend = file;
-        renderFilePreview();
-        renderControls();
-    }
-
-    function removeSelectedFile() {
-        appState.fileToSend = null;
-        elements.fileInput.value = '';
-        renderFilePreview();
-        renderControls();
-    }
-
-    function renderFilePreview() {
-        if (appState.fileToSend) {
-            elements.filePreview.innerHTML = `
-                <span>${appState.fileToSend.name} (${formatBytes(appState.fileToSend.size)})</span>
-                <span class="remove-file" title="移除檔案">×</span>
-            `;
-            elements.filePreview.classList.remove('hidden');
-        } else {
-            elements.filePreview.classList.add('hidden');
-        }
     }
 
     async function changeNickname() {
@@ -433,10 +305,10 @@
         const oldLower = myProfile?.nicknameLower || '';
         if(lower === oldLower) return;
         try {
-            const res = await runTransaction(dbRef(db, `nicknames/${lower}`), (cur) => (cur === null || cur === uid) ? uid : undefined);
+            const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => (cur === null || cur === uid) ? uid : undefined);
             if (!res.committed) return alert('暱稱已被使用，請換一個');
-            await update(dbRef(db, `users/${uid}/profile`), { nickname: newNick, nicknameLower: lower });
-            if (oldLower) await set(dbRef(db, `nicknames/${oldLower}`), null);
+            await update(ref(db, `users/${uid}/profile`), { nickname: newNick, nicknameLower: lower });
+            if (oldLower) await set(ref(db, `nicknames/${oldLower}`), null);
             alert('已更新暱稱');
         } catch (e) { alert('更新失敗，請稍後再試'); }
     }
@@ -449,7 +321,7 @@
         const isMe = currentUser.uid === uid;
         const isCurrentUserAdmin = admins.has(currentUser.uid);
         const canManage = isCurrentUserAdmin && !isMe;
-
+        
         const isTargetBanned = bans.has(uid);
         const isTargetAdmin = admins.has(uid);
 
@@ -458,7 +330,7 @@
             adminButtonHtml = `<button id="promoteBtn" class="${isTargetAdmin ? 'danger' : 'promote'}">${isTargetAdmin ? '移除管理員' : '設為管理員'}</button>`;
         }
 
-        const banButtonHtml = canManage
+        const banButtonHtml = canManage 
             ? `<button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button>`
             : '';
 
@@ -473,26 +345,26 @@
           </div>
         </div>`;
         elements.userCard.classList.remove('hidden');
-
+        
         const closeBtn = document.getElementById('closeCard');
         if (closeBtn) closeBtn.onclick = () => elements.userCard.classList.add('hidden');
-
+        
         const banBtn = document.getElementById('banBtn');
         if (banBtn) banBtn.onclick = async () => {
           if (!confirm(isTargetBanned ? '確定要解封？' : '確定封鎖此用戶？')) return;
-          const targetRef = dbRef(db, `bans/${uid}`);
-          try {
+          const targetRef = ref(db, `bans/${uid}`);
+          try { 
             await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
             elements.userCard.classList.add('hidden');
           } catch { alert('操作失敗'); }
         };
-
+        
         const promoteBtn = document.getElementById('promoteBtn');
         if (promoteBtn) {
             promoteBtn.onclick = async () => {
                 const actionText = isTargetAdmin ? '移除其管理員權限' : '將其設為管理員';
                 if (!confirm(`確定要${actionText}？`)) return;
-                const targetRef = dbRef(db, `admins/${uid}`);
+                const targetRef = ref(db, `admins/${uid}`);
                 try {
                     await (isTargetAdmin ? remove(targetRef) : set(targetRef, true));
                     elements.userCard.classList.add('hidden');
@@ -505,20 +377,11 @@
         if (!text) return '';
         const names = new Set(Array.from(appState.users.values()).map(u => u.nickname).filter(Boolean));
         const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) =>
+        return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => 
             names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m
         );
     }
-
-    function formatBytes(bytes, decimals = 2) {
-        if (!+bytes) return '0 Bytes';
-        const k = 1024;
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-    }
-
+    
     function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
   </script>
 </body>

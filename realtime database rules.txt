@@ -1,0 +1,72 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "messages": {
+      ".read": "auth != null",
+      ".indexOn": ["time"],
+      "$msgId": {
+        ".write": "
+          auth != null &&
+          !root.child('bans').child(auth.uid).exists() &&
+          (
+            (!data.exists() && newData.child('uid').val() == auth.uid) ||
+            data.child('uid').val() == auth.uid ||
+            root.child('admins').child(auth.uid).exists()
+          )
+        ",
+        ".validate": "
+          newData.hasChildren(['text','time','uid','nickname']) &&
+          newData.child('uid').val() == auth.uid &&
+          newData.child('text').isString() &&
+          newData.child('text').val().length > 0 &&
+          newData.child('text').val().length <= 2000 &&
+          newData.child('time').isNumber() &&
+          newData.child('nickname').isString()
+        "
+      }
+    },
+
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        "profile": {
+          ".read": "auth != null",
+          ".write": "auth != null && (auth.uid == $uid || !data.exists())"
+        },
+        "private": {
+          ".read": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).exists())",
+          ".write": "auth != null && (auth.uid == $uid || !data.exists())"
+        }
+      }
+    },
+
+    "nicknames": {
+      ".read": "auth != null",
+      "$lower": {
+        ".write": "
+          auth != null &&
+          (
+            !data.exists() ||     
+            data.val() == auth.uid 
+          )
+        "
+      }
+    },
+
+    "admins": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      }
+    },
+
+    "bans": {
+      ".read": "auth != null", 
+      "$uid": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      }
+    }
+  }
+}
