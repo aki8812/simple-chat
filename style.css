@@ -71,6 +71,16 @@ button.danger:hover{background:#c22626}
 .chat-message.self{ flex-direction:row-reverse; }
 .bubble { background:var(--brand); padding:10px 14px; border-radius:12px; max-width:70%; position:relative; }
 .chat-message.other .bubble { background:var(--brand2); }
+
+/* 當自己被提及時的訊息突顯樣式 */
+.chat-message.mention-me .bubble {
+  background-color: #4a412a;
+  border: 1px solid #a48d4e;
+}
+.chat-message.mention-me.other .bubble::after {
+  border-right-color: #4a412a;
+}
+
 .chat-message.self .bubble::after { content:""; position:absolute; right:-8px; top:12px; border:8px solid transparent; border-left-color:var(--brand); }
 .chat-message.other .bubble::after { content:""; position:absolute; left:-8px; top:12px; border:8px solid transparent; border-right-color:var(--brand2); }
 .bubble-head{display:flex; align-items:center; gap:6px; margin-bottom:6px}
