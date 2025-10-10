@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
+  <meta name="theme-color" content="#23272a"/>
+  <link rel="manifest" href="manifest.json" />
   <meta charset="UTF-8" />
   <title>登入 / 註冊 - SimpleChat</title>
   <link rel="stylesheet" href="style2.css" />
@@ -192,6 +194,13 @@
       case 'auth/too-many-requests': return '嘗試過於頻繁，請稍後再試';
       default: return `發生錯誤：${error?.message || String(error)}`;
     }
+  }
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js');
+    });
   }
 </script>
 </body>

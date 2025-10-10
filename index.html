@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
+  <meta name="theme-color" content="#23272a"/>
+  <link rel="manifest" href="manifest.json" />
   <meta charset="UTF-8" />
   <title>SimpleChat</title>
   <link rel="icon" href="favicon.ico" />
@@ -25,6 +27,13 @@
       const u = auth.currentUser;
       window.location.replace(u ? 'chat.html' : 'login.html');
     }, 2500);
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
   </script>
 </body>
 </html>
