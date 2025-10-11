@@ -54,7 +54,7 @@
   <script type="module">
     import { auth, db } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, push, onChildAdded, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt, endBefore } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref, push, onChildAdded, onChildRemoved, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt, endBefore } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     const elements = {
       messagesBox: document.getElementById('messages'),
@@ -140,30 +140,31 @@
         updateAndRenderUI();
       });
       
-      const newMessagesQuery = query(ref(db, 'messages'), orderByChild('time'), startAt(appState.latestMessageTime + 1));
+      const messagesRef = ref(db, 'messages');
+
+
+      const newMessagesQuery = query(messagesRef, orderByChild('time'), startAt(appState.latestMessageTime));
       onChildAdded(newMessagesQuery, (snap) => {
           if (appState.messages.has(snap.key)) return;
+          
           const msg = snap.val();
           appState.messages.set(snap.key, msg);
+          appState.latestMessageTime = msg.time;
+
           const el = createMessageElement(snap.key, msg);
           elements.messagesBox.appendChild(el);
           elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
       });
 
-      onValue(ref(db, 'messages'), (snapshot) => {
-        const serverMessages = snapshot.val() || {};
-        const serverKeys = new Set(Object.keys(serverMessages));
-        const localKeys = Array.from(appState.messages.keys());
-        
-        localKeys.forEach(localKey => {
-            if (!serverKeys.has(localKey)) {
-                appState.messages.delete(localKey);
-                const msgElement = elements.messagesBox.querySelector(`[data-msg-id="${localKey}"]`);
-                if (msgElement) {
-                    msgElement.remove();
-                }
+
+      onChildRemoved(messagesRef, (snap) => {
+        if (appState.messages.has(snap.key)) {
+            appState.messages.delete(snap.key);
+            const msgElement = elements.messagesBox.querySelector(`[data-msg-id="${snap.key}"]`);
+            if (msgElement) {
+                msgElement.remove();
             }
-        });
+        }
       });
     }
 
@@ -360,7 +361,7 @@
 
     }
 
-    // For debugging/testing purposes
+
     window.loadMoreMessages = loadMoreMessages;
 
     async function changeNickname() {
