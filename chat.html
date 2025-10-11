@@ -83,7 +83,7 @@
       isLoadingMore: false,
       hasMoreOldMessages: true,
       oldestMessageTime: 0,
-      isInitialising: true, 
+      isInitialising: true,
     };
 
     onAuthStateChanged(auth, async (user) => {
@@ -109,7 +109,7 @@
         bansSnap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
 
         await loadInitialMessages();
-        updateAndRenderUI(true); 
+        updateAndRenderUI(true);
         attachRealtimeListeners();
         setupEventListeners();
 
@@ -214,7 +214,6 @@
         const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
         elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
         
-
         if (isInitial) {
             elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
             setTimeout(() => {
@@ -272,11 +271,14 @@
 
             newMessages.sort((a, b) => a.msg.time - b.msg.time);
 
+
+            const fragment = document.createDocumentFragment();
             newMessages.forEach(item => {
                 appState.messages.set(item.key, item.msg);
                 const el = createMessageElement(item.key, item.msg);
-                elements.messagesBox.insertBefore(el, elements.messagesBox.firstChild);
+                fragment.appendChild(el);
             });
+            elements.messagesBox.insertBefore(fragment, elements.messagesBox.firstChild);
 
             appState.oldestMessageTime = minTime;
             appState.hasMoreOldMessages = messageCount === 30;
@@ -355,7 +357,6 @@
           openUserCard(e.target.dataset.uid);
         }
       });
-
 
       elements.messagesBox.addEventListener('scroll', () => {
         if (elements.messagesBox.scrollTop < 50 && !appState.isLoadingMore && !appState.isInitialising) {
