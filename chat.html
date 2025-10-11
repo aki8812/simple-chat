@@ -83,6 +83,7 @@
       isLoadingMore: false,
       hasMoreOldMessages: true,
       oldestMessageTime: 0,
+      isInitialising: true, 
     };
 
     onAuthStateChanged(auth, async (user) => {
@@ -108,7 +109,7 @@
         bansSnap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
 
         await loadInitialMessages();
-        updateAndRenderUI();
+        updateAndRenderUI(true); 
         attachRealtimeListeners();
         setupEventListeners();
 
@@ -142,7 +143,6 @@
       
       const messagesRef = ref(db, 'messages');
 
-
       const newMessagesQuery = query(messagesRef, orderByChild('time'), startAt(appState.latestMessageTime));
       onChildAdded(newMessagesQuery, (snap) => {
           if (appState.messages.has(snap.key)) return;
@@ -156,22 +156,19 @@
           elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
       });
 
-
       onChildRemoved(messagesRef, (snap) => {
         if (appState.messages.has(snap.key)) {
             appState.messages.delete(snap.key);
             const msgElement = elements.messagesBox.querySelector(`[data-msg-id="${snap.key}"]`);
-            if (msgElement) {
-                msgElement.remove();
-            }
+            if (msgElement) msgElement.remove();
         }
       });
     }
 
-    function updateAndRenderUI() {
+    function updateAndRenderUI(isInitial = false) {
       renderControls();
       renderUserList();
-      renderAllMessages();
+      renderAllMessages(isInitial);
     }
     
     function renderControls() {
@@ -213,10 +210,17 @@
         elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
     }
     
-    function renderAllMessages() {
+    function renderAllMessages(isInitial = false) {
         const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
         elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
-        elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
+        
+
+        if (isInitial) {
+            elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
+            setTimeout(() => {
+                appState.isInitialising = false;
+            }, 1000);
+        }
     }
 
     async function loadInitialMessages() {
@@ -277,7 +281,6 @@
             appState.oldestMessageTime = minTime;
             appState.hasMoreOldMessages = messageCount === 30;
 
-            // Restore scroll position
             const newScrollHeight = elements.messagesBox.scrollHeight;
             elements.messagesBox.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
 
@@ -353,16 +356,14 @@
         }
       });
 
+
       elements.messagesBox.addEventListener('scroll', () => {
-        if (elements.messagesBox.scrollTop < 50) {
+        if (elements.messagesBox.scrollTop < 50 && !appState.isLoadingMore && !appState.isInitialising) {
           loadMoreMessages();
         }
       });
 
     }
-
-
-    window.loadMoreMessages = loadMoreMessages;
 
     async function changeNickname() {
         const newNick = elements.newNickEl.value.trim();
