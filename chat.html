@@ -54,7 +54,7 @@
   <script type="module">
     import { auth, db } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, push, onChildAdded, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref, push, onChildAdded, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt, endBefore } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     const elements = {
       messagesBox: document.getElementById('messages'),
@@ -80,6 +80,9 @@
       bans: new Set(),
       messages: new Map(),
       latestMessageTime: 0,
+      isLoadingMore: false,
+      hasMoreOldMessages: true,
+      oldestMessageTime: 0,
     };
 
     onAuthStateChanged(auth, async (user) => {
@@ -221,15 +224,66 @@
         
         if (initialSnap.exists()) {
             let maxTime = 0;
+            let minTime = Infinity;
+            let messageCount = 0;
             initialSnap.forEach(snap => {
                 const msg = snap.val();
                 appState.messages.set(snap.key, msg);
-                if (msg.time > maxTime) {
-                    maxTime = msg.time;
-                }
+                if (msg.time > maxTime) maxTime = msg.time;
+                if (msg.time < minTime) minTime = msg.time;
+                messageCount++;
             });
             appState.latestMessageTime = maxTime;
+            appState.oldestMessageTime = minTime;
+            appState.hasMoreOldMessages = messageCount === 30;
+        } else {
+            appState.hasMoreOldMessages = false;
         }
+    }
+
+    async function loadMoreMessages() {
+        if (appState.isLoadingMore || !appState.hasMoreOldMessages) return;
+        appState.isLoadingMore = true;
+
+        const msgQuery = query(ref(db, 'messages'), orderByChild('time'), endBefore(appState.oldestMessageTime), limitToLast(30));
+        const snap = await get(msgQuery);
+
+        if (snap.exists()) {
+            const oldScrollHeight = elements.messagesBox.scrollHeight;
+            const oldScrollTop = elements.messagesBox.scrollTop;
+
+            const newMessages = [];
+            let minTime = appState.oldestMessageTime;
+            let messageCount = 0;
+
+            snap.forEach(s => {
+                const msg = s.val();
+                if (!appState.messages.has(s.key)) {
+                    newMessages.push({ key: s.key, msg });
+                    if (msg.time < minTime) minTime = msg.time;
+                    messageCount++;
+                }
+            });
+
+            newMessages.sort((a, b) => a.msg.time - b.msg.time);
+
+            newMessages.forEach(item => {
+                appState.messages.set(item.key, item.msg);
+                const el = createMessageElement(item.key, item.msg);
+                elements.messagesBox.insertBefore(el, elements.messagesBox.firstChild);
+            });
+
+            appState.oldestMessageTime = minTime;
+            appState.hasMoreOldMessages = messageCount === 30;
+
+            // Restore scroll position
+            const newScrollHeight = elements.messagesBox.scrollHeight;
+            elements.messagesBox.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+
+        } else {
+            appState.hasMoreOldMessages = false;
+        }
+        appState.isLoadingMore = false;
     }
 
     function createMessageElement(key, msg) {
@@ -297,7 +351,17 @@
           openUserCard(e.target.dataset.uid);
         }
       });
+
+      elements.messagesBox.addEventListener('scroll', () => {
+        if (elements.messagesBox.scrollTop < 50) {
+          loadMoreMessages();
+        }
+      });
+
     }
+
+    // For debugging/testing purposes
+    window.loadMoreMessages = loadMoreMessages;
 
     async function changeNickname() {
         const newNick = elements.newNickEl.value.trim();
