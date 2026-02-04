@@ -1,16 +1,25 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
   <link rel="apple-touch-icon" href="icon/icon-512x512.png" />
-  <meta name="theme-color" content="#23272a"/>
+  <meta name="theme-color" content="#23272a" />
   <link rel="manifest" href="manifest.json" />
   <meta charset="UTF-8" />
   <title>SimpleChat</title>
   <link rel="icon" href="favicon.ico" />
   <style>
-    body { background:#2c2f33; color:#fff; font-family:sans-serif; text-align:center; padding-top:100px; margin:0; }
+    body {
+      background: #2c2f33;
+      color: #fff;
+      font-family: sans-serif;
+      text-align: center;
+      padding-top: 100px;
+      margin: 0;
+    }
   </style>
 </head>
+
 <body>
   <h1>Redirecting…</h1>
   <script type="module">
@@ -23,7 +32,6 @@
         window.location.replace('login.html');
       }
     });
-    // 後備：若 onAuthStateChanged 未觸發
     setTimeout(() => {
       const u = auth.currentUser;
       window.location.replace(u ? 'chat.html' : 'login.html');
@@ -37,4 +45,5 @@
     }
   </script>
 </body>
+
 </html>

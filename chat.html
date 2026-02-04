@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
   <link rel="apple-touch-icon" href="icon/icon-512x512.png" />
-  <meta name="theme-color" content="#23272a"/>
+  <meta name="theme-color" content="#23272a" />
   <link rel="manifest" href="manifest.json" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -10,6 +11,7 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="favicon.ico" />
 </head>
+
 <body>
   <div class="app">
     <aside class="sidebar">
@@ -23,12 +25,11 @@
         <button id="manageBtn">成員管理</button>
       </div>
     </aside>
-
     <main class="main">
       <header class="topbar">
         <div class="left">
           <div id="verifyBanner" class="banner hidden">
-            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >  
+            尚未完成 Email 驗證，驗證前無法發話。若未收到驗證信，請查看您的垃圾郵件。或者 - >
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
@@ -39,18 +40,14 @@
           <button id="logout" class="danger">登出</button>
         </div>
       </header>
-
       <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
-
       <div class="input-area">
         <input type="text" id="messageInput" placeholder="載入中..." autocomplete="off" disabled />
         <button id="sendBtn" type="button" disabled>送出</button>
       </div>
     </main>
   </div>
-
   <div id="userCard" class="popup hidden"></div>
-
   <script type="module">
     import { auth, db } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
@@ -88,7 +85,7 @@
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) return window.location.href = 'login.html';
-      try { await reload(user); } catch {}
+      try { await reload(user); } catch { }
       appState.currentUser = user;
       await initializeApp();
     });
@@ -140,27 +137,24 @@
         snap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
         updateAndRenderUI();
       });
-      
-      const messagesRef = ref(db, 'messages');
 
+      const messagesRef = ref(db, 'messages');
       const newMessagesQuery = query(messagesRef, orderByChild('time'), startAt(appState.latestMessageTime));
       onChildAdded(newMessagesQuery, (snap) => {
-          if (appState.messages.has(snap.key)) return;
-          
-          const msg = snap.val();
-          appState.messages.set(snap.key, msg);
-          appState.latestMessageTime = msg.time;
-
-          const el = createMessageElement(snap.key, msg);
-          elements.messagesBox.appendChild(el);
-          elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
+        if (appState.messages.has(snap.key)) return;
+        const msg = snap.val();
+        appState.messages.set(snap.key, msg);
+        appState.latestMessageTime = msg.time;
+        const el = createMessageElement(snap.key, msg);
+        elements.messagesBox.appendChild(el);
+        elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
       });
 
       onChildRemoved(messagesRef, (snap) => {
         if (appState.messages.has(snap.key)) {
-            appState.messages.delete(snap.key);
-            const msgElement = elements.messagesBox.querySelector(`[data-msg-id="${snap.key}"]`);
-            if (msgElement) msgElement.remove();
+          appState.messages.delete(snap.key);
+          const msgElement = elements.messagesBox.querySelector(`[data-msg-id="${snap.key}"]`);
+          if (msgElement) msgElement.remove();
         }
       });
     }
@@ -170,142 +164,132 @@
       renderUserList();
       renderAllMessages(isInitial);
     }
-    
-    function renderControls() {
-        const { currentUser, admins, bans, users } = appState;
-        const myProfile = users.get(currentUser.uid);
-        const isVerified = !!currentUser.emailVerified;
-        const isBanned = bans.has(currentUser.uid);
-        const hasNick = myProfile && myProfile.nickname;
-        const isAdmin = admins.has(currentUser.uid);
 
-        elements.verifyBanner.classList.toggle('hidden', isVerified);
-        elements.banBanner.classList.toggle('hidden', !isBanned);
-        elements.adminPanel.classList.toggle('hidden', !isAdmin);
-        
-        const isDisabled = !isVerified || isBanned || !hasNick;
-        elements.inputEl.disabled = isDisabled;
-        elements.sendBtn.disabled = isDisabled;
-        elements.inputEl.placeholder = isDisabled
-            ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
-            : '輸入訊息...（可 @暱稱）';
-            
-        if(myProfile) elements.newNickEl.value = myProfile.nickname || '';
+    function renderControls() {
+      const { currentUser, admins, bans, users } = appState;
+      const myProfile = users.get(currentUser.uid);
+      const isVerified = !!currentUser.emailVerified;
+      const isBanned = bans.has(currentUser.uid);
+      const hasNick = myProfile && myProfile.nickname;
+      const isAdmin = admins.has(currentUser.uid);
+
+      elements.verifyBanner.classList.toggle('hidden', isVerified);
+      elements.banBanner.classList.toggle('hidden', !isBanned);
+      elements.adminPanel.classList.toggle('hidden', !isAdmin);
+
+      const isDisabled = !isVerified || isBanned || !hasNick;
+      elements.inputEl.disabled = isDisabled;
+      elements.sendBtn.disabled = isDisabled;
+      elements.inputEl.placeholder = isDisabled
+        ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
+        : '輸入訊息...（可 @暱稱）';
+
+      if (myProfile) elements.newNickEl.value = myProfile.nickname || '';
     }
 
     function renderUserList() {
-        const { currentUser, users, admins, bans } = appState;
-        const userArray = Array.from(users.values());
-        userArray.sort((a, b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant'));
-        
-        const html = userArray.map(u => {
-            const isMe = currentUser.uid === u.uid;
-            const isAdmin = admins.has(u.uid);
-            const isBanned = bans.has(u.uid);
-            const classes = ['userrow', isMe && 'me', isAdmin && 'admin', isBanned && 'banned'].filter(Boolean).join(' ');
-            const adminTag = isAdmin ? ' <span class="tag-admin">[管理員]</span>' : '';
-            return `<div class="${classes}" data-uid="${u.uid}">@${u.nickname || '未命名'}${adminTag}</div>`;
-        }).join('');
+      const { currentUser, users, admins, bans } = appState;
+      const userArray = Array.from(users.values());
+      userArray.sort((a, b) => (a.nickname || '').localeCompare(b.nickname || '', 'zh-Hant'));
 
-        elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
+      const html = userArray.map(u => {
+        const isMe = currentUser.uid === u.uid;
+        const isAdmin = admins.has(u.uid);
+        const isBanned = bans.has(u.uid);
+        const classes = ['userrow', isMe && 'me', isAdmin && 'admin', isBanned && 'banned'].filter(Boolean).join(' ');
+        const adminTag = isAdmin ? ' <span class="tag-admin">[管理員]</span>' : '';
+        return `<div class="${classes}" data-uid="${u.uid}">@${u.nickname || '未命名'}${adminTag}</div>`;
+      }).join('');
+
+      elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
     }
-    
+
     function renderAllMessages(isInitial = false) {
-        const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
-        elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
-        
-        if (isInitial) {
-            elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
-            setTimeout(() => {
-                appState.isInitialising = false;
-            }, 1000);
-        }
+      const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
+      elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
+
+      if (isInitial) {
+        elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
+        setTimeout(() => {
+          appState.isInitialising = false;
+        }, 1000);
+      }
     }
 
     async function loadInitialMessages() {
-        const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(30));
-        const initialSnap = await get(msgQuery);
-        
-        if (initialSnap.exists()) {
-            let maxTime = 0;
-            let minTime = Infinity;
-            let messageCount = 0;
-            initialSnap.forEach(snap => {
-                const msg = snap.val();
-                appState.messages.set(snap.key, msg);
-                if (msg.time > maxTime) maxTime = msg.time;
-                if (msg.time < minTime) minTime = msg.time;
-                messageCount++;
-            });
-            appState.latestMessageTime = maxTime;
-            appState.oldestMessageTime = minTime;
-            appState.hasMoreOldMessages = messageCount === 30;
-        } else {
-            appState.hasMoreOldMessages = false;
-        }
+      const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(30));
+      const initialSnap = await get(msgQuery);
+
+      if (initialSnap.exists()) {
+        let maxTime = 0;
+        let minTime = Infinity;
+        let messageCount = 0;
+        initialSnap.forEach(snap => {
+          const msg = snap.val();
+          appState.messages.set(snap.key, msg);
+          if (msg.time > maxTime) maxTime = msg.time;
+          if (msg.time < minTime) minTime = msg.time;
+          messageCount++;
+        });
+        appState.latestMessageTime = maxTime;
+        appState.oldestMessageTime = minTime;
+        appState.hasMoreOldMessages = messageCount === 30;
+      } else {
+        appState.hasMoreOldMessages = false;
+      }
     }
 
     async function loadMoreMessages() {
-        if (appState.isLoadingMore || !appState.hasMoreOldMessages) return;
-        appState.isLoadingMore = true;
+      if (appState.isLoadingMore || !appState.hasMoreOldMessages) return;
+      appState.isLoadingMore = true;
 
-        const msgQuery = query(ref(db, 'messages'), orderByChild('time'), endBefore(appState.oldestMessageTime), limitToLast(30));
-        const snap = await get(msgQuery);
+      const msgQuery = query(ref(db, 'messages'), orderByChild('time'), endBefore(appState.oldestMessageTime), limitToLast(30));
+      const snap = await get(msgQuery);
 
-        if (snap.exists()) {
-            const oldScrollHeight = elements.messagesBox.scrollHeight;
-            const oldScrollTop = elements.messagesBox.scrollTop;
+      if (snap.exists()) {
+        const oldScrollHeight = elements.messagesBox.scrollHeight;
+        const oldScrollTop = elements.messagesBox.scrollTop;
+        const newMessages = [];
+        let minTime = appState.oldestMessageTime;
+        let messageCount = 0;
 
-            const newMessages = [];
-            let minTime = appState.oldestMessageTime;
-            let messageCount = 0;
-
-            snap.forEach(s => {
-                const msg = s.val();
-                if (!appState.messages.has(s.key)) {
-                    newMessages.push({ key: s.key, msg });
-                    if (msg.time < minTime) minTime = msg.time;
-                    messageCount++;
-                }
-            });
-
-            newMessages.sort((a, b) => a.msg.time - b.msg.time);
-
-
-            const fragment = document.createDocumentFragment();
-            newMessages.forEach(item => {
-                appState.messages.set(item.key, item.msg);
-                const el = createMessageElement(item.key, item.msg);
-                fragment.appendChild(el);
-            });
-            elements.messagesBox.insertBefore(fragment, elements.messagesBox.firstChild);
-
-            appState.oldestMessageTime = minTime;
-            appState.hasMoreOldMessages = messageCount === 30;
-
-            const newScrollHeight = elements.messagesBox.scrollHeight;
-            elements.messagesBox.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
-
-        } else {
-            appState.hasMoreOldMessages = false;
-        }
-        appState.isLoadingMore = false;
+        snap.forEach(s => {
+          const msg = s.val();
+          if (!appState.messages.has(s.key)) {
+            newMessages.push({ key: s.key, msg });
+            if (msg.time < minTime) minTime = msg.time;
+            messageCount++;
+          }
+        });
+        newMessages.sort((a, b) => a.msg.time - b.msg.time);
+        const fragment = document.createDocumentFragment();
+        newMessages.forEach(item => {
+          appState.messages.set(item.key, item.msg);
+          const el = createMessageElement(item.key, item.msg);
+          fragment.appendChild(el);
+        });
+        elements.messagesBox.insertBefore(fragment, elements.messagesBox.firstChild);
+        appState.oldestMessageTime = minTime;
+        appState.hasMoreOldMessages = messageCount === 30;
+        const newScrollHeight = elements.messagesBox.scrollHeight;
+        elements.messagesBox.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+      } else {
+        appState.hasMoreOldMessages = false;
+      }
+      appState.isLoadingMore = false;
     }
 
     function createMessageElement(key, msg) {
-        const { currentUser, admins, users } = appState;
-        const isSelf = currentUser.uid === msg.uid;
-        const isAdmin = admins.has(currentUser.uid);
-        const canDelete = isSelf || isAdmin;
-
-        const wrap = document.createElement('div');
-        wrap.className = `chat-message ${isSelf ? 'self' : 'other'}`;
-        wrap.dataset.msgId = key;
-        
-        const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
-        const authorName = users.get(msg.uid)?.nickname || msg.nickname || '...';
-        
-        wrap.innerHTML = `
+      const { currentUser, admins, users } = appState;
+      const isSelf = currentUser.uid === msg.uid;
+      const isAdmin = admins.has(currentUser.uid);
+      const canDelete = isSelf || isAdmin;
+      const wrap = document.createElement('div');
+      wrap.className = `chat-message ${isSelf ? 'self' : 'other'}`;
+      wrap.dataset.msgId = key;
+      const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
+      const authorName = users.get(msg.uid)?.nickname || msg.nickname || '...';
+      wrap.innerHTML = `
         <div class="bubble">
             <div class="bubble-head">
                 <div class="bubble-name" data-uid="${msg.uid}">${authorName}</div>
@@ -314,7 +298,7 @@
             <div class="bubble-text">${renderWithMentions(msg.text)}</div>
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
-        return wrap;
+      return wrap;
     }
 
     async function sendMessage() {
@@ -331,21 +315,19 @@
 
     function setupEventListeners() {
       elements.sendBtn.onclick = sendMessage;
-      elements.inputEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }};
+      elements.inputEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } };
       elements.logoutBtn.onclick = () => signOut(auth);
       elements.saveNickBtn.onclick = changeNickname;
       elements.brandBtn.onclick = () => location.reload();
       elements.manageBtn.onclick = () => window.location.href = 'admin.html';
       elements.resendVerify.onclick = async () => {
-          try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); } 
-          catch { alert('寄送太頻繁，請稍後再試。'); }
+        try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); }
+        catch { alert('寄送太頻繁，請稍後再試。'); }
       };
-      
       elements.userListContainer.addEventListener('click', e => {
         const target = e.target.closest('.userrow');
-        if(target) openUserCard(target.dataset.uid);
+        if (target) openUserCard(target.dataset.uid);
       });
-
       elements.messagesBox.addEventListener('click', e => {
         if (e.target.classList.contains('del-btn')) {
           const key = e.target.dataset.key;
@@ -357,54 +339,47 @@
           openUserCard(e.target.dataset.uid);
         }
       });
-
       elements.messagesBox.addEventListener('scroll', () => {
         if (elements.messagesBox.scrollTop < 50 && !appState.isLoadingMore && !appState.isInitialising) {
           loadMoreMessages();
         }
       });
-
     }
 
     async function changeNickname() {
-        const newNick = elements.newNickEl.value.trim();
-        if (newNick.length < 3 || newNick.length > 24) return alert('暱稱需 3–24 字');
-        const uid = appState.currentUser.uid;
-        const myProfile = appState.users.get(uid);
-        const lower = newNick.toLowerCase();
-        const oldLower = myProfile?.nicknameLower || '';
-        if(lower === oldLower) return;
-        try {
-            const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => (cur === null || cur === uid) ? uid : undefined);
-            if (!res.committed) return alert('暱稱已被使用，請換一個');
-            await update(ref(db, `users/${uid}/profile`), { nickname: newNick, nicknameLower: lower });
-            if (oldLower) await set(ref(db, `nicknames/${oldLower}`), null);
-            alert('已更新暱稱');
-        } catch (e) { alert('更新失敗，請稍後再試'); }
+      const newNick = elements.newNickEl.value.trim();
+      if (newNick.length < 3 || newNick.length > 24) return alert('暱稱需 3–24 字');
+      const uid = appState.currentUser.uid;
+      const myProfile = appState.users.get(uid);
+      const lower = newNick.toLowerCase();
+      const oldLower = myProfile?.nicknameLower || '';
+      if (lower === oldLower) return;
+      try {
+        const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => (cur === null || cur === uid) ? uid : undefined);
+        if (!res.committed) return alert('暱稱已被使用，請換一個');
+        await update(ref(db, `users/${uid}/profile`), { nickname: newNick, nicknameLower: lower });
+        if (oldLower) await set(ref(db, `nicknames/${oldLower}`), null);
+        alert('已更新暱稱');
+      } catch (e) { alert('更新失敗，請稍後再試'); }
     }
 
     function openUserCard(uid) {
-        const { currentUser, users, admins, bans } = appState;
-        const targetUser = users.get(uid);
-        if (!targetUser) return;
-
-        const isMe = currentUser.uid === uid;
-        const isCurrentUserAdmin = admins.has(currentUser.uid);
-        const canManage = isCurrentUserAdmin && !isMe;
-        
-        const isTargetBanned = bans.has(uid);
-        const isTargetAdmin = admins.has(uid);
-
-        let adminButtonHtml = '';
-        if (canManage) {
-            adminButtonHtml = `<button id="promoteBtn" class="${isTargetAdmin ? 'danger' : 'promote'}">${isTargetAdmin ? '移除管理員' : '設為管理員'}</button>`;
-        }
-
-        const banButtonHtml = canManage 
-            ? `<button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button>`
-            : '';
-
-        elements.userCard.innerHTML = `
+      const { currentUser, users, admins, bans } = appState;
+      const targetUser = users.get(uid);
+      if (!targetUser) return;
+      const isMe = currentUser.uid === uid;
+      const isCurrentUserAdmin = admins.has(currentUser.uid);
+      const canManage = isCurrentUserAdmin && !isMe;
+      const isTargetBanned = bans.has(uid);
+      const isTargetAdmin = admins.has(uid);
+      let adminButtonHtml = '';
+      if (canManage) {
+        adminButtonHtml = `<button id="promoteBtn" class="${isTargetAdmin ? 'danger' : 'promote'}">${isTargetAdmin ? '移除管理員' : '設為管理員'}</button>`;
+      }
+      const banButtonHtml = canManage
+        ? `<button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button>`
+        : '';
+      elements.userCard.innerHTML = `
         <div class="user-card">
           <div class="card-name">@${targetUser.nickname} ${isTargetAdmin ? '<span class="tag-admin">[管理員]</span>' : ''}</div>
           <div class="card-registered">註冊時間：${fmt(targetUser.registeredAt)}</div>
@@ -414,44 +389,40 @@
             <button id="closeCard">關閉</button>
           </div>
         </div>`;
-        elements.userCard.classList.remove('hidden');
-        
-        const closeBtn = document.getElementById('closeCard');
-        if (closeBtn) closeBtn.onclick = () => elements.userCard.classList.add('hidden');
-        
-        const banBtn = document.getElementById('banBtn');
-        if (banBtn) banBtn.onclick = async () => {
-          if (!confirm(isTargetBanned ? '確定要解封？' : '確定封鎖此用戶？')) return;
-          const targetRef = ref(db, `bans/${uid}`);
-          try { 
-            await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
+      elements.userCard.classList.remove('hidden');
+      const closeBtn = document.getElementById('closeCard');
+      if (closeBtn) closeBtn.onclick = () => elements.userCard.classList.add('hidden');
+      const banBtn = document.getElementById('banBtn');
+      if (banBtn) banBtn.onclick = async () => {
+        if (!confirm(isTargetBanned ? '確定要解封？' : '確定封鎖此用戶？')) return;
+        const targetRef = ref(db, `bans/${uid}`);
+        try {
+          await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
+          elements.userCard.classList.add('hidden');
+        } catch { alert('操作失敗'); }
+      };
+      const promoteBtn = document.getElementById('promoteBtn');
+      if (promoteBtn) {
+        promoteBtn.onclick = async () => {
+          const actionText = isTargetAdmin ? '移除其管理員權限' : '將其設為管理員';
+          if (!confirm(`確定要${actionText}？`)) return;
+          const targetRef = ref(db, `admins/${uid}`);
+          try {
+            await (isTargetAdmin ? remove(targetRef) : set(targetRef, true));
             elements.userCard.classList.add('hidden');
-          } catch { alert('操作失敗'); }
+          } catch (err) { alert('操作失敗'); }
         };
-        
-        const promoteBtn = document.getElementById('promoteBtn');
-        if (promoteBtn) {
-            promoteBtn.onclick = async () => {
-                const actionText = isTargetAdmin ? '移除其管理員權限' : '將其設為管理員';
-                if (!confirm(`確定要${actionText}？`)) return;
-                const targetRef = ref(db, `admins/${uid}`);
-                try {
-                    await (isTargetAdmin ? remove(targetRef) : set(targetRef, true));
-                    elements.userCard.classList.add('hidden');
-                } catch (err) { alert('操作失敗'); }
-            };
-        }
+      }
     }
 
     function renderWithMentions(text) {
-        if (!text) return '';
-        const names = new Set(Array.from(appState.users.values()).map(u => u.nickname).filter(Boolean));
-        const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => 
-            names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m
-        );
+      if (!text) return '';
+      const names = new Set(Array.from(appState.users.values()).map(u => u.nickname).filter(Boolean));
+      const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) =>
+        names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m
+      );
     }
-    
     function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
   </script>
   <script>
@@ -462,4 +433,5 @@
     }
   </script>
 </body>
+
 </html>
