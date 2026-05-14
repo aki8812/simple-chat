@@ -367,6 +367,17 @@ button.danger:hover {
   color: var(--muted);
 }
 
+.del-btn {
+  background: #ff5555;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.del-btn:hover {
+  background: #e04444;
+}
+
 .popup {
   position: fixed;
   top: 50%;
