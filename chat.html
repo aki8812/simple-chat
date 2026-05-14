@@ -42,7 +42,10 @@
       </header>
       <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
       <div class="input-area">
-        <input type="text" id="messageInput" placeholder="載入中..." autocomplete="off" disabled />
+        <div class="input-container">
+          <div id="mentionList" class="mention-list hidden"></div>
+          <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false" data-placeholder="載入中..."></div>
+        </div>
         <button id="sendBtn" type="button" disabled>送出</button>
       </div>
     </main>
@@ -72,6 +75,7 @@
       manageBtn: document.getElementById('manageBtn'),
       modalOverlay: document.getElementById('modalOverlay'),
       customModal: document.getElementById('customModal'),
+      mentionList: document.getElementById('mentionList'),
     };
 
     const appState = {
@@ -85,7 +89,16 @@
       hasMoreOldMessages: true,
       oldestMessageTime: 0,
       isInitialising: true,
+      mentionHistory: JSON.parse(localStorage.getItem('mentionHistory') || '[]'),
     };
+
+    function saveMentionHistory(nickname) {
+      if (nickname === 'everyone') return;
+      let history = appState.mentionHistory.filter(n => n !== nickname);
+      history.unshift(nickname);
+      appState.mentionHistory = history.slice(0, 10);
+      localStorage.setItem('mentionHistory', JSON.stringify(appState.mentionHistory));
+    }
 
     function showModal({ title, content, confirmText = '確定', cancelText = '取消', showCancel = false }) {
       return new Promise((resolve) => {
@@ -204,18 +217,18 @@
       const isVerified = !!currentUser.emailVerified;
       const isBanned = bans.has(currentUser.uid);
       const hasNick = myProfile && myProfile.nickname;
-      const isAdmin = admins.has(currentUser.uid);
 
       elements.verifyBanner.classList.toggle('hidden', isVerified);
       elements.banBanner.classList.toggle('hidden', !isBanned);
-      elements.adminPanel.classList.toggle('hidden', !isAdmin);
+      elements.adminPanel.classList.toggle('hidden', !admins.has(currentUser.uid));
 
       const isDisabled = !isVerified || isBanned || !hasNick;
-      elements.inputEl.disabled = isDisabled;
+      elements.inputEl.contentEditable = !isDisabled;
       elements.sendBtn.disabled = isDisabled;
-      elements.inputEl.placeholder = isDisabled
+      const placeholder = isDisabled
         ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
         : '輸入訊息...（可 @暱稱）';
+      elements.inputEl.setAttribute('data-placeholder', placeholder);
 
       if (myProfile) elements.newNickEl.value = myProfile.nickname || '';
     }
@@ -335,20 +348,32 @@
     }
 
     async function sendMessage() {
-      const text = elements.inputEl.value.trim();
+      const text = elements.inputEl.innerText.trim();
       if (!text) return;
       const myProfile = appState.users.get(appState.currentUser.uid);
       try {
+        const mentionRegex = /@([\p{L}\p{N}_-]{3,24})/gu;
+        let match;
+        while ((match = mentionRegex.exec(text)) !== null) {
+          saveMentionHistory(match[1]);
+        }
         await push(ref(db, 'messages'), {
           uid: appState.currentUser.uid, text, time: Date.now(), nickname: myProfile.nickname,
         });
-        elements.inputEl.value = '';
+        elements.inputEl.innerHTML = '';
       } catch { showModal({ title: '錯誤', content: '訊息傳送失敗。' }); }
     }
 
     function setupEventListeners() {
       elements.sendBtn.onclick = sendMessage;
-      elements.inputEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } };
+      elements.inputEl.onkeydown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+        if (e.key === ' ') hideMentionList();
+      };
+      elements.inputEl.oninput = handleInput;
       elements.logoutBtn.onclick = () => signOut(auth);
       elements.saveNickBtn.onclick = changeNickname;
       elements.brandBtn.onclick = () => location.reload();
@@ -373,8 +398,15 @@
             remove(ref(db, `messages/${key}`)).catch(() => showModal({ title: '錯誤', content: '刪除失敗' }));
           }
         }
-        if (e.target.classList.contains('bubble-name')) {
-          openUserCard(e.target.dataset.uid);
+        if (e.target.classList.contains('bubble-name') || e.target.classList.contains('mention')) {
+          const uid = e.target.dataset.uid;
+          if (uid) openUserCard(uid);
+          else if (e.target.innerText.includes('everyone')) return;
+          else {
+            const name = e.target.innerText.replace('@', '');
+            const user = Array.from(appState.users.values()).find(u => u.nickname === name);
+            if (user) openUserCard(user.uid);
+          }
         }
       });
       elements.messagesBox.addEventListener('scroll', () => {
@@ -382,6 +414,106 @@
           loadMoreMessages();
         }
       });
+    }
+
+    function handleInput() {
+      highlightInputMentions();
+      const text = elements.inputEl.innerText;
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      const textBeforeCursor = text.substring(0, selection.focusOffset);
+      const lastAtIdx = textBeforeCursor.lastIndexOf('@');
+
+      if (lastAtIdx !== -1) {
+        const queryStr = textBeforeCursor.substring(lastAtIdx + 1);
+        if (!queryStr.includes(' ')) {
+          showMentionList(queryStr);
+          return;
+        }
+      }
+      hideMentionList();
+    }
+
+    function highlightInputMentions() {
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+      const savedRange = selection.getRangeAt(0).cloneRange();
+      const offset = selection.focusOffset;
+      const text = elements.inputEl.innerText;
+
+      const highlighted = text.replace(/@([\p{L}\p{N}_-]{3,24})/gu, '<span class="mention-in-input">@$1</span>');
+      if (elements.inputEl.innerHTML !== highlighted) {
+        // elements.inputEl.innerHTML = highlighted;
+        // restore cursor logic is complex, simple innerText for now to avoid jumpy cursor
+        // will use a simpler approach: only style on blur or just trust the autocomplete
+      }
+    }
+
+    function showMentionList(queryStr) {
+      const allUsers = Array.from(appState.users.values());
+      let filtered = [];
+
+      if (queryStr === '') {
+        filtered.push({ nickname: 'everyone', isEveryone: true });
+        const historyNames = appState.mentionHistory;
+        const fromHistory = allUsers.filter(u => historyNames.includes(u.nickname)).slice(0, 3);
+        filtered.push(...fromHistory);
+        if (filtered.length < 4) {
+          const others = allUsers.filter(u => !historyNames.includes(u.nickname));
+          const random = others.sort(() => 0.5 - Math.random()).slice(0, 4 - filtered.length);
+          filtered.push(...random);
+        }
+      } else {
+        const lower = queryStr.toLowerCase();
+        filtered = allUsers
+          .filter(u => u.nickname && u.nickname.toLowerCase().startsWith(lower))
+          .sort((a, b) => a.nickname.localeCompare(b.nickname))
+          .slice(0, 3);
+        if ('everyone'.startsWith(lower)) filtered.unshift({ nickname: 'everyone', isEveryone: true });
+      }
+
+      if (filtered.length === 0) return hideMentionList();
+
+      elements.mentionList.innerHTML = filtered.map(u => `
+        <div class="mention-item ${u.isEveryone ? 'everyone' : ''}" data-name="${u.nickname}">
+          <span class="name">@${u.nickname}</span>
+          ${u.isEveryone ? '' : `<span class="sub">${u.nickname.toLowerCase().startsWith(queryStr.toLowerCase()) ? '匹配' : '推薦'}</span>`}
+        </div>
+      `).join('');
+      elements.mentionList.classList.remove('hidden');
+
+      elements.mentionList.querySelectorAll('.mention-item').forEach(item => {
+        item.onclick = () => {
+          insertMention(item.dataset.name);
+        };
+      });
+    }
+
+    function insertMention(nickname) {
+      const text = elements.inputEl.innerText;
+      const selection = window.getSelection();
+      const offset = selection.focusOffset;
+      const textBeforeCursor = text.substring(0, offset);
+      const lastAtIdx = textBeforeCursor.lastIndexOf('@');
+      const textAfterCursor = text.substring(offset);
+
+      const newText = textBeforeCursor.substring(0, lastAtIdx) + '@' + nickname + ' ' + textAfterCursor;
+      elements.inputEl.innerText = newText;
+      hideMentionList();
+      elements.inputEl.focus();
+      // Place cursor after mention
+      const newOffset = lastAtIdx + nickname.length + 2;
+      const newRange = document.createRange();
+      newRange.setStart(elements.inputEl.childNodes[0] || elements.inputEl, newOffset);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      highlightInputMentions();
+    }
+
+    function hideMentionList() {
+      elements.mentionList.classList.add('hidden');
     }
 
     async function changeNickname() {
@@ -465,11 +597,15 @@
 
     function renderWithMentions(text) {
       if (!text) return '';
-      const names = new Set(Array.from(appState.users.values()).map(u => u.nickname).filter(Boolean));
+      const usersByNick = new Map();
+      Array.from(appState.users.values()).forEach(u => usersByNick.set(u.nickname, u.uid));
+      
       const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) =>
-        names.has(name) ? `${sp}<span class="mention">@${name}</span>` : m
-      );
+      return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
+        if (name === 'everyone') return `${sp}<span class="mention">@everyone</span>`;
+        const uid = usersByNick.get(name);
+        return uid ? `${sp}<span class="mention" data-uid="${uid}">@${name}</span>` : m;
+      });
     }
     function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
   </script>
