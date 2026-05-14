@@ -444,9 +444,6 @@
 
       const highlighted = text.replace(/@([\p{L}\p{N}_-]{3,24})/gu, '<span class="mention-in-input">@$1</span>');
       if (elements.inputEl.innerHTML !== highlighted) {
-        // elements.inputEl.innerHTML = highlighted;
-        // restore cursor logic is complex, simple innerText for now to avoid jumpy cursor
-        // will use a simpler approach: only style on blur or just trust the autocomplete
       }
     }
 
@@ -502,14 +499,16 @@
       elements.inputEl.innerText = newText;
       hideMentionList();
       elements.inputEl.focus();
-      // Place cursor after mention
-      const newOffset = lastAtIdx + nickname.length + 2;
-      const newRange = document.createRange();
-      newRange.setStart(elements.inputEl.childNodes[0] || elements.inputEl, newOffset);
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-      highlightInputMentions();
+      
+      const newPos = lastAtIdx + nickname.length + 2;
+      const range = document.createRange();
+      const sel = window.getSelection();
+      if (elements.inputEl.childNodes.length > 0) {
+        range.setStart(elements.inputEl.childNodes[0], newPos);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
 
     function hideMentionList() {
@@ -575,7 +574,6 @@
           try {
             await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
             elements.userCard.classList.add('hidden');
-            elements.modalOverlay.classList.add('hidden');
           } catch { showModal({ title: '錯誤', content: '操作失敗' }); }
         };
       }
@@ -589,7 +587,6 @@
           try {
             await (isTargetAdmin ? remove(targetRef) : set(targetRef, true));
             elements.userCard.classList.add('hidden');
-            elements.modalOverlay.classList.add('hidden');
           } catch (err) { showModal({ title: '錯誤', content: '操作失敗' }); }
         };
       }
