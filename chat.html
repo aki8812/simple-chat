@@ -427,12 +427,10 @@
             <button id="closeCard">關閉</button>
           </div>
         </div>`;
-      elements.modalOverlay.classList.remove('hidden');
       elements.userCard.classList.remove('hidden');
       const closeBtn = document.getElementById('closeCard');
       if (closeBtn) {
         closeBtn.onclick = () => {
-          elements.modalOverlay.classList.add('hidden');
           elements.userCard.classList.add('hidden');
         };
       }
