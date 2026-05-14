@@ -298,6 +298,48 @@ button.danger:hover {
   border: 1px solid #1f2225;
 }
 
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 999;
+}
+
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-title {
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.modal-body {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.modal-actions button.confirm {
+  background-color: var(--brand);
+}
+
+.modal-actions button.cancel {
+  background-color: var(--brand2);
+}
+
 .user-card {
   display: flex;
   flex-direction: column;

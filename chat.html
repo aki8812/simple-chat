@@ -47,6 +47,8 @@
       </div>
     </main>
   </div>
+  <div id="modalOverlay" class="modal-overlay hidden"></div>
+  <div id="customModal" class="popup hidden"></div>
   <div id="userCard" class="popup hidden"></div>
   <script type="module">
     import { auth, db } from './firebase.js';
@@ -68,6 +70,8 @@
       brandBtn: document.getElementById('brandBtn'),
       adminPanel: document.getElementById('adminPanel'),
       manageBtn: document.getElementById('manageBtn'),
+      modalOverlay: document.getElementById('modalOverlay'),
+      customModal: document.getElementById('customModal'),
     };
 
     const appState = {
@@ -82,6 +86,36 @@
       oldestMessageTime: 0,
       isInitialising: true,
     };
+
+    function showModal({ title, content, confirmText = '確定', cancelText = '取消', showCancel = false }) {
+      return new Promise((resolve) => {
+        elements.customModal.innerHTML = `
+          <div class="modal-content">
+            <div class="modal-title">${title}</div>
+            <div class="modal-body">${content}</div>
+            <div class="modal-actions">
+              ${showCancel ? `<button class="cancel">${cancelText}</button>` : ''}
+              <button class="confirm">${confirmText}</button>
+            </div>
+          </div>`;
+        elements.modalOverlay.classList.remove('hidden');
+        elements.customModal.classList.remove('hidden');
+        const confirmBtn = elements.customModal.querySelector('.confirm');
+        const cancelBtn = elements.customModal.querySelector('.cancel');
+        confirmBtn.onclick = () => {
+          elements.modalOverlay.classList.add('hidden');
+          elements.customModal.classList.add('hidden');
+          resolve(true);
+        };
+        if (cancelBtn) {
+          cancelBtn.onclick = () => {
+            elements.modalOverlay.classList.add('hidden');
+            elements.customModal.classList.add('hidden');
+            resolve(false);
+          };
+        }
+      });
+    }
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) return window.location.href = 'login.html';
@@ -111,8 +145,7 @@
         setupEventListeners();
 
       } catch (error) {
-        console.error("初始化失敗:", error);
-        alert("無法載入聊天室資料，請稍後重試。");
+        showModal({ title: '錯誤', content: '無法載入聊天室資料，請稍後重試。' });
       }
     }
 
@@ -310,7 +343,7 @@
           uid: appState.currentUser.uid, text, time: Date.now(), nickname: myProfile.nickname,
         });
         elements.inputEl.value = '';
-      } catch { alert('訊息傳送失敗。'); }
+      } catch { showModal({ title: '錯誤', content: '訊息傳送失敗。' }); }
     }
 
     function setupEventListeners() {
@@ -321,18 +354,23 @@
       elements.brandBtn.onclick = () => location.reload();
       elements.manageBtn.onclick = () => window.location.href = 'admin.html';
       elements.resendVerify.onclick = async () => {
-        try { await sendEmailVerification(appState.currentUser); alert('已重新寄出驗證信。'); }
-        catch { alert('寄送太頻繁，請稍後再試。'); }
+        try {
+          await sendEmailVerification(appState.currentUser);
+          showModal({ title: '通知', content: '已重新寄出驗證信。' });
+        } catch {
+          showModal({ title: '錯誤', content: '寄送太頻繁，請稍後再試。' });
+        }
       };
       elements.userListContainer.addEventListener('click', e => {
         const target = e.target.closest('.userrow');
         if (target) openUserCard(target.dataset.uid);
       });
-      elements.messagesBox.addEventListener('click', e => {
+      elements.messagesBox.addEventListener('click', async e => {
         if (e.target.classList.contains('del-btn')) {
           const key = e.target.dataset.key;
-          if (confirm('確定要刪除此訊息？')) {
-            remove(ref(db, `messages/${key}`)).catch(() => alert('刪除失敗'));
+          const ok = await showModal({ title: '確認', content: '確定要刪除此訊息？', showCancel: true });
+          if (ok) {
+            remove(ref(db, `messages/${key}`)).catch(() => showModal({ title: '錯誤', content: '刪除失敗' }));
           }
         }
         if (e.target.classList.contains('bubble-name')) {
@@ -348,7 +386,7 @@
 
     async function changeNickname() {
       const newNick = elements.newNickEl.value.trim();
-      if (newNick.length < 3 || newNick.length > 24) return alert('暱稱需 3–24 字');
+      if (newNick.length < 3 || newNick.length > 24) return showModal({ title: '提示', content: '暱稱需 3–24 字' });
       const uid = appState.currentUser.uid;
       const myProfile = appState.users.get(uid);
       const lower = newNick.toLowerCase();
@@ -356,11 +394,11 @@
       if (lower === oldLower) return;
       try {
         const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => (cur === null || cur === uid) ? uid : undefined);
-        if (!res.committed) return alert('暱稱已被使用，請換一個');
+        if (!res.committed) return showModal({ title: '提示', content: '暱稱已被使用，請換一個' });
         await update(ref(db, `users/${uid}/profile`), { nickname: newNick, nicknameLower: lower });
         if (oldLower) await set(ref(db, `nicknames/${oldLower}`), null);
-        alert('已更新暱稱');
-      } catch (e) { alert('更新失敗，請稍後再試'); }
+        showModal({ title: '完成', content: '已更新暱稱' });
+      } catch (e) { showModal({ title: '錯誤', content: '更新失敗，請稍後再試' }); }
     }
 
     function openUserCard(uid) {
@@ -389,28 +427,40 @@
             <button id="closeCard">關閉</button>
           </div>
         </div>`;
+      elements.modalOverlay.classList.remove('hidden');
       elements.userCard.classList.remove('hidden');
       const closeBtn = document.getElementById('closeCard');
-      if (closeBtn) closeBtn.onclick = () => elements.userCard.classList.add('hidden');
-      const banBtn = document.getElementById('banBtn');
-      if (banBtn) banBtn.onclick = async () => {
-        if (!confirm(isTargetBanned ? '確定要解封？' : '確定封鎖此用戶？')) return;
-        const targetRef = ref(db, `bans/${uid}`);
-        try {
-          await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
+      if (closeBtn) {
+        closeBtn.onclick = () => {
+          elements.modalOverlay.classList.add('hidden');
           elements.userCard.classList.add('hidden');
-        } catch { alert('操作失敗'); }
-      };
+        };
+      }
+      const banBtn = document.getElementById('banBtn');
+      if (banBtn) {
+        banBtn.onclick = async () => {
+          const ok = await showModal({ title: '確認', content: isTargetBanned ? '確定要解封？' : '確定封鎖此用戶？', showCancel: true });
+          if (!ok) return;
+          const targetRef = ref(db, `bans/${uid}`);
+          try {
+            await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
+            elements.userCard.classList.add('hidden');
+            elements.modalOverlay.classList.add('hidden');
+          } catch { showModal({ title: '錯誤', content: '操作失敗' }); }
+        };
+      }
       const promoteBtn = document.getElementById('promoteBtn');
       if (promoteBtn) {
         promoteBtn.onclick = async () => {
           const actionText = isTargetAdmin ? '移除其管理員權限' : '將其設為管理員';
-          if (!confirm(`確定要${actionText}？`)) return;
+          const ok = await showModal({ title: '確認', content: `確定要${actionText}？`, showCancel: true });
+          if (!ok) return;
           const targetRef = ref(db, `admins/${uid}`);
           try {
             await (isTargetAdmin ? remove(targetRef) : set(targetRef, true));
             elements.userCard.classList.add('hidden');
-          } catch (err) { alert('操作失敗'); }
+            elements.modalOverlay.classList.add('hidden');
+          } catch (err) { showModal({ title: '錯誤', content: '操作失敗' }); }
         };
       }
     }

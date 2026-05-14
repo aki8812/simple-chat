@@ -29,6 +29,8 @@
     </div>
     <div id="errorMsg" class="error"></div>
   </div>
+  <div id="modalOverlay" class="modal-overlay hidden"></div>
+  <div id="customModal" class="popup hidden"></div>
   <script type="module">
     import { auth, db } from './firebase.js';
     import {
@@ -50,9 +52,41 @@
     const infoMsg = document.getElementById('infoMsg');
     const togglePwd = document.getElementById('togglePassword');
     const forgot = document.getElementById('forgot');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const customModal = document.getElementById('customModal');
 
     let isLogin = true;
     const REDIRECT_GUARD_KEY = 'signupInProgress';
+
+    function showModal({ title, content, confirmText = '確定', cancelText = '取消', showCancel = false }) {
+      return new Promise((resolve) => {
+        customModal.innerHTML = `
+          <div class="modal-content">
+            <div class="modal-title">${title}</div>
+            <div class="modal-body">${content}</div>
+            <div class="modal-actions">
+              ${showCancel ? `<button class="cancel">${cancelText}</button>` : ''}
+              <button class="confirm">${confirmText}</button>
+            </div>
+          </div>`;
+        modalOverlay.classList.remove('hidden');
+        customModal.classList.remove('hidden');
+        const confirmBtn = customModal.querySelector('.confirm');
+        const cancelBtn = customModal.querySelector('.cancel');
+        confirmBtn.onclick = () => {
+          modalOverlay.classList.add('hidden');
+          customModal.classList.add('hidden');
+          resolve(true);
+        };
+        if (cancelBtn) {
+          cancelBtn.onclick = () => {
+            modalOverlay.classList.add('hidden');
+            customModal.classList.add('hidden');
+            resolve(false);
+          };
+        }
+      });
+    }
 
     togglePwd.addEventListener('click', () => {
       password.type = password.type === 'password' ? 'text' : 'password';
@@ -132,9 +166,9 @@
           }
           try {
             await sendEmailVerification(cred.user);
-            alert('驗證信已寄出，請到信箱收信（可能在垃圾郵件）');
+            await showModal({ title: '註冊成功', content: '驗證信已寄出，請到信箱收信（可能在垃圾郵件）' });
           } catch {
-            alert('驗證信寄送失敗，可在聊天室右上角再寄一次');
+            await showModal({ title: '通知', content: '驗證信寄送失敗，可在聊天室右上角再寄一次' });
           }
           localStorage.setItem('pendingNickname', nick);
           sessionStorage.removeItem(REDIRECT_GUARD_KEY);

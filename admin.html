@@ -22,12 +22,17 @@
             <div class="section-title">---載入中---</div>
         </section>
     </div>
+    <div id="modalOverlay" class="modal-overlay hidden"></div>
+    <div id="customModal" class="popup hidden"></div>
     <script type="module">
         import { auth, db } from './firebase.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
         import { ref, onValue, get, set, remove } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
         const listBox = document.getElementById('listBox');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const customModal = document.getElementById('customModal');
+
         document.getElementById('toChat').onclick = () => (location.href = 'chat.html');
 
         const appState = {
@@ -36,6 +41,36 @@
             admins: new Set(),
             bans: new Set(),
         };
+
+        function showModal({ title, content, confirmText = '確定', cancelText = '取消', showCancel = false }) {
+            return new Promise((resolve) => {
+                customModal.innerHTML = `
+                    <div class="modal-content">
+                        <div class="modal-title">${title}</div>
+                        <div class="modal-body">${content}</div>
+                        <div class="modal-actions">
+                            ${showCancel ? `<button class="cancel">${cancelText}</button>` : ''}
+                            <button class="confirm">${confirmText}</button>
+                        </div>
+                    </div>`;
+                modalOverlay.classList.remove('hidden');
+                customModal.classList.remove('hidden');
+                const confirmBtn = customModal.querySelector('.confirm');
+                const cancelBtn = customModal.querySelector('.cancel');
+                confirmBtn.onclick = () => {
+                    modalOverlay.classList.add('hidden');
+                    customModal.classList.add('hidden');
+                    resolve(true);
+                };
+                if (cancelBtn) {
+                    cancelBtn.onclick = () => {
+                        modalOverlay.classList.add('hidden');
+                        customModal.classList.add('hidden');
+                        resolve(false);
+                    };
+                }
+            });
+        }
 
         const dataReady = { users: false, admins: false, bans: false };
         let initialCheckPassed = false;
@@ -50,7 +85,7 @@
             appState.currentUser = user;
             const adminSnap = await get(ref(db, `admins/${user.uid}`));
             if (!adminSnap.exists() || adminSnap.val() !== true) {
-                alert('你沒有權限，無法進入此頁面。');
+                await showModal({ title: '錯誤', content: '你沒有權限，無法進入此頁面。' });
                 return (location.href = 'chat.html');
             }
             initialCheckPassed = true;
@@ -93,10 +128,10 @@
             });
         }
 
-        function updateAndRender() {
+        async function updateAndRender() {
             if (!initialCheckPassed || !Object.values(dataReady).every(Boolean)) return;
             if (!appState.admins.has(appState.currentUser.uid)) {
-                alert('你的管理員權限已被移除。');
+                await showModal({ title: '權限變更', content: '你的管理員權限已被移除。' });
                 location.href = 'chat.html';
                 return;
             }
@@ -193,8 +228,11 @@
                 confirmMsg = isBanned ? `確定要解封 ${nickname}？` : `確定要封鎖 ${nickname}？`;
                 actionFn = () => isBanned ? remove(ref(db, `bans/${uid}`)) : set(ref(db, `bans/${uid}`), true);
             }
-            if (actionFn && confirm(confirmMsg)) {
-                try { await actionFn(); } catch { alert('操作失敗'); }
+            if (actionFn) {
+                const ok = await showModal({ title: '管理操作', content: confirmMsg, showCancel: true });
+                if (ok) {
+                    try { await actionFn(); } catch { showModal({ title: '錯誤', content: '操作失敗' }); }
+                }
             }
         }
         function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
