@@ -46,7 +46,11 @@
           <div id="mentionList" class="mention-list hidden"></div>
           <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false" data-placeholder="載入中..."></div>
         </div>
-        <button id="sendBtn" type="button" disabled>送出</button>
+        <button id="sendBtn" type="button" disabled title="發送訊息">
+          <svg viewBox="0 0 24 24">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+          </svg>
+        </button>
       </div>
     </main>
   </div>
@@ -90,6 +94,8 @@
       oldestMessageTime: 0,
       isInitialising: true,
       mentionHistory: JSON.parse(localStorage.getItem('mentionHistory') || '[]'),
+      mentionIndex: 0,
+      mentionItems: [],
     };
 
     function saveMentionHistory(nickname) {
@@ -361,12 +367,37 @@
           uid: appState.currentUser.uid, text, time: Date.now(), nickname: myProfile.nickname,
         });
         elements.inputEl.innerHTML = '';
+        hideMentionList();
       } catch { showModal({ title: '錯誤', content: '訊息傳送失敗。' }); }
     }
 
     function setupEventListeners() {
       elements.sendBtn.onclick = sendMessage;
       elements.inputEl.onkeydown = (e) => {
+        if (!elements.mentionList.classList.contains('hidden')) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            appState.mentionIndex = (appState.mentionIndex + 1) % appState.mentionItems.length;
+            renderMentionHighlight();
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            appState.mentionIndex = (appState.mentionIndex - 1 + appState.mentionItems.length) % appState.mentionItems.length;
+            renderMentionHighlight();
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const item = appState.mentionItems[appState.mentionIndex];
+            if (item) insertMention(item.nickname);
+            return;
+          }
+          if (e.key === 'Escape') {
+            hideMentionList();
+            return;
+          }
+        }
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           sendMessage();
@@ -438,13 +469,8 @@
     function highlightInputMentions() {
       const selection = window.getSelection();
       if (!selection.rangeCount) return;
-      const savedRange = selection.getRangeAt(0).cloneRange();
-      const offset = selection.focusOffset;
       const text = elements.inputEl.innerText;
-
       const highlighted = text.replace(/@([\p{L}\p{N}_-]{3,24})/gu, '<span class="mention-in-input">@$1</span>');
-      if (elements.inputEl.innerHTML !== highlighted) {
-      }
     }
 
     function showMentionList(queryStr) {
@@ -472,18 +498,31 @@
 
       if (filtered.length === 0) return hideMentionList();
 
-      elements.mentionList.innerHTML = filtered.map(u => `
-        <div class="mention-item ${u.isEveryone ? 'everyone' : ''}" data-name="${u.nickname}">
+      appState.mentionItems = filtered;
+      appState.mentionIndex = 0;
+      renderMentionItems();
+      elements.mentionList.classList.remove('hidden');
+    }
+
+    function renderMentionItems() {
+      elements.mentionList.innerHTML = appState.mentionItems.map((u, i) => `
+        <div class="mention-item ${u.isEveryone ? 'everyone' : ''} ${i === appState.mentionIndex ? 'active' : ''}" data-index="${i}">
           <span class="name">@${u.nickname}</span>
-          ${u.isEveryone ? '' : `<span class="sub">${u.nickname.toLowerCase().startsWith(queryStr.toLowerCase()) ? '匹配' : '推薦'}</span>`}
         </div>
       `).join('');
-      elements.mentionList.classList.remove('hidden');
 
       elements.mentionList.querySelectorAll('.mention-item').forEach(item => {
         item.onclick = () => {
-          insertMention(item.dataset.name);
+          const idx = parseInt(item.dataset.index);
+          insertMention(appState.mentionItems[idx].nickname);
         };
+      });
+    }
+
+    function renderMentionHighlight() {
+      const items = elements.mentionList.querySelectorAll('.mention-item');
+      items.forEach((item, i) => {
+        item.classList.toggle('active', i === appState.mentionIndex);
       });
     }
 
@@ -513,6 +552,8 @@
 
     function hideMentionList() {
       elements.mentionList.classList.add('hidden');
+      appState.mentionItems = [];
+      appState.mentionIndex = 0;
     }
 
     async function changeNickname() {
