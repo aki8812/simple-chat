@@ -175,18 +175,19 @@
                     <button class="ban-btn ${isBanned ? '' : 'danger'}" data-banned="${isBanned}">
                         ${isBanned ? '解封鎖' : '封鎖'}
                     </button>
+                    <button class="rename-btn" style="background: #7289da; color: #fff;">更改暱稱</button>
                 `;
                 }
             }
             return `
-        <div class="member-row ${isAdmin ? 'admin' : ''}" data-uid="${user.uid}">
+        <div class="member-row ${isAdmin ? 'admin' : ''}" data-uid="${user.uid}" style="cursor: pointer;">
           <div class="member-head">
             <span class="name">${user.nickname || '（無暱稱）'}</span>
             ${isAdmin ? '<span class="tag-admin">[管理員]</span>' : ''}
-            <button class="toggle">▼</button>
+            <span class="toggle-arrow" style="color: var(--muted); font-size: 12px; pointer-events: none;">▼</span>
           </div>
-          <div class="member-body hidden">
-            <div>電子郵件：<span class="email">（點上方▼載入）</span></div>
+          <div class="member-body hidden" style="cursor: default;">
+            <div>電子郵件：<span class="email">（點擊展開載入）</span></div>
             <div>註冊時間：${fmt(user.registeredAt)}</div>
             <div class="manage-area">${buttonsHtml}</div>
           </div>
@@ -199,26 +200,58 @@
             if (!row) return;
             const uid = row.dataset.uid;
             const user = appState.users.get(uid);
-            if (target.classList.contains('toggle')) {
+
+            if (target.matches('.promote-btn, .demote-btn, .ban-btn, .rename-btn')) {
+                handleAdminAction(target, uid, user.nickname);
+                return;
+            }
+
+            if (!target.closest('.manage-area') || target.classList.contains('manage-area')) {
                 const body = row.querySelector('.member-body');
+                const arrow = row.querySelector('.toggle-arrow');
                 body.classList.toggle('hidden');
                 if (!body.classList.contains('hidden')) {
+                    arrow.textContent = '▲';
                     const emailEl = row.querySelector('.email');
                     if (emailEl.textContent.includes('載入')) {
                         const snap = await get(ref(db, `users/${uid}/private/email`));
                         emailEl.textContent = snap.val() || '（無）';
                     }
+                } else {
+                    arrow.textContent = '▼';
                 }
-            }
-            else if (target.matches('.promote-btn, .demote-btn, .ban-btn')) {
-                handleAdminAction(target, uid, user.nickname);
             }
         });
 
         async function handleAdminAction(target, uid, nickname) {
             const isBanned = appState.bans.has(uid);
             let confirmMsg, actionFn;
-            if (target.classList.contains('promote-btn')) {
+            if (target.classList.contains('rename-btn')) {
+                const ok = await showModal({ 
+                    title: '更改暱稱', 
+                    content: `
+                        <div style="margin-bottom: 8px;">請輸入 <b>${nickname}</b> 的新暱稱：</div>
+                        <input type="text" id="adminRenameInput" value="${nickname}" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #3a3f45; background: #1e2124; color: #fff; outline: none;" />
+                    `, 
+                    showCancel: true 
+                });
+                if (ok) {
+                    const inputEl = document.getElementById('adminRenameInput');
+                    const newNick = inputEl ? inputEl.value.trim() : '';
+                    if (newNick.length < 3 || newNick.length > 24) return showModal({ title: '提示', content: '暱稱需 3–24 字' });
+                    const lower = newNick.toLowerCase();
+                    const oldLower = nickname.toLowerCase();
+                    if (lower === oldLower) return;
+                    try {
+                        const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => (cur === null || cur === uid) ? uid : undefined);
+                        if (!res.committed) return showModal({ title: '提示', content: '暱稱已被使用，請換一個' });
+                        await update(ref(db, `users/${uid}/profile`), { nickname: newNick, nicknameLower: lower });
+                        await set(ref(db, `nicknames/${oldLower}`), null);
+                        showModal({ title: '完成', content: '已更新暱稱' });
+                    } catch (e) { showModal({ title: '錯誤', content: '操作失敗' }); }
+                }
+                return;
+            } else if (target.classList.contains('promote-btn')) {
                 confirmMsg = `確定要將 ${nickname} 設為管理員？`;
                 actionFn = () => set(ref(db, `admins/${uid}`), true);
             } else if (target.classList.contains('demote-btn')) {
