@@ -13,20 +13,21 @@
 </head>
 
 <body>
-  <div class="container">
+  <div class="container" style="min-height: 420px; display: flex; flex-direction: column;">
     <h2 id="formTitle">登入 SimpleChat</h2>
     <input type="email" id="email" placeholder="電子郵件" />
     <div class="password-wrapper">
-      <input type="password" id="password" placeholder="密碼(至少6碼)" />
+      <input type="password" id="password" placeholder="密碼(至少6碼)" style="margin-bottom: 4px;" />
       <span id="togglePassword" title="顯示/隱藏密碼">👁️</span>
     </div>
-    <input type="text" id="nickname" placeholder="暱稱（3–24 字；註冊時填寫）" style="display:none" />
-    <button id="submitBtn">登入</button>
-    <div class="toggle" id="toggleForm">沒有或已有帳號？<span class="blue">點此註冊 / 登入</span></div>
-    <div class="toggle" style="margin-top:8px"><span class="blue" id="forgot">忘記密碼？點此重設</span></div>
-    <div id="infoMsg" class="info" style="text-align:center; margin-top:8px; color:#9ad">
-      註冊後會寄出驗證信；未驗證前可以登入，但無法發話。
+    <div style="text-align: left; margin-bottom: 14px; padding-left: 4px;">
+      <span id="forgot" style="color: #9aa7bd; text-decoration: underline; cursor: pointer; font-size: 13px;">忘記密碼？</span>
     </div>
+    <input type="text" id="nickname" placeholder="暱稱（3–24 字；註冊時填寫）" style="display:none; margin-top: 0; margin-bottom: 14px;" />
+    <button id="submitBtn">登入</button>
+    <div style="flex-grow: 1;"></div>
+    <div class="toggle" id="toggleForm" style="margin: 0;">點此<span class="blue" style="text-decoration: underline; font-weight: bold; font-size: 15px; margin-left: 4px;">註冊 / 登入</span></div>
+    <div style="flex-grow: 1;"></div>
     <div id="errorMsg" class="error"></div>
   </div>
   <div id="modalOverlay" class="modal-overlay hidden"></div>
@@ -106,7 +107,7 @@
       if (!emailVal) { errorMsg.textContent = '請先輸入電子郵件再按重設'; return; }
       try {
         await sendPasswordResetEmail(auth, emailVal);
-        infoMsg.textContent = '重設密碼連結已寄出，請查收郵件(可能位於垃圾郵件)。';
+        await showModal({ title: '通知', content: '重設密碼連結已寄出，請查收郵件(可能位於垃圾郵件)。' });
       } catch (err) {
         errorMsg.textContent = mapAuthErrorToZh(err);
       }
