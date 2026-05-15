@@ -273,18 +273,25 @@ button.danger:hover {
 }
 
 .mention {
-  color: #fff;
+  color: #00aaff;
   font-weight: bold;
+  background-color: rgba(0, 170, 255, 0.2);
+  padding: 0 4px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
 .mention:hover {
   text-decoration: underline;
+  background-color: rgba(0, 170, 255, 0.3);
 }
 
 .input-area .mention-in-input {
   color: #00aaff;
-  font-weight: 700;
+  font-weight: bold;
+  background-color: rgba(0, 170, 255, 0.2);
+  padding: 0 4px;
+  border-radius: 4px;
 }
 
 #messageInput {
