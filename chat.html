@@ -405,7 +405,10 @@
         if (e.key === ' ') hideMentionList();
       };
       elements.inputEl.oninput = handleInput;
-      elements.logoutBtn.onclick = () => signOut(auth);
+      elements.logoutBtn.onclick = async () => {
+        const ok = await showModal({ title: '確認', content: '確定要登出嗎？', showCancel: true });
+        if (ok) signOut(auth);
+      };
       elements.saveNickBtn.onclick = changeNickname;
       elements.brandBtn.onclick = () => location.reload();
       elements.manageBtn.onclick = () => window.location.href = 'admin.html';
