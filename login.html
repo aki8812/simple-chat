@@ -98,6 +98,7 @@
       formTitle.textContent = isLogin ? '登入 SimpleChat' : '註冊 SimpleChat';
       submitBtn.textContent = isLogin ? '登入' : '註冊';
       nickname.style.display = isLogin ? 'none' : 'block';
+      document.getElementById('forgotContainer').style.display = isLogin ? 'block' : 'none';
       errorMsg.textContent = '';
     });
 
