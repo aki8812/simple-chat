@@ -324,7 +324,9 @@
         appState.oldestMessageTime = minTime;
         appState.hasMoreOldMessages = messageCount === 30;
         const newScrollHeight = elements.messagesBox.scrollHeight;
+        elements.messagesBox.style.scrollBehavior = 'auto';
         elements.messagesBox.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+        elements.messagesBox.style.scrollBehavior = '';
       } else {
         appState.hasMoreOldMessages = false;
       }
