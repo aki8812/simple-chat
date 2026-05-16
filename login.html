@@ -106,7 +106,7 @@
       if (!emailVal) { errorMsg.textContent = '請先輸入電子郵件再按重設'; return; }
       try {
         await sendPasswordResetEmail(auth, emailVal);
-        await showModal({ title: '通知', content: '重設密碼連結已寄出，請查收郵件(可能位於垃圾郵件)。' });
+        await showModal({ title: '通知', content: '重設密碼連結已寄出，請查收郵件。' });
       } catch (err) {
         errorMsg.textContent = mapAuthErrorToZh(err);
       }
@@ -166,7 +166,7 @@
           }
           try {
             await sendEmailVerification(cred.user);
-            await showModal({ title: '註冊成功', content: '驗證信已寄出，請到信箱收信（可能在垃圾郵件）' });
+            await showModal({ title: '註冊成功', content: '驗證信已寄出，請到信箱收信完成驗證。' });
           } catch {
             await showModal({ title: '通知', content: '驗證信寄送失敗，可在聊天室右上角再寄一次' });
           }

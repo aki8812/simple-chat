@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <link rel="apple-touch-icon" href="icon/icon-512x512.png" />
+  <meta name="theme-color" content="#23272a" />
+  <link rel="manifest" href="manifest.json" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>驗證信箱 - SimpleChat</title>
+  <link rel="stylesheet" href="style2.css" />
+  <link rel="icon" href="favicon.ico" />
+</head>
+
+<body>
+  <div class="container" style="text-align: center;">
+    <h2 id="statusTitle" style="margin-bottom: 24px;">驗證處理中...</h2>
+    <div id="statusMessage" style="color: var(--muted); margin-bottom: 24px; font-size: 15px;">
+      請稍候，正在為您驗證電子郵件。
+    </div>
+    <button id="actionBtn" style="display: none;" onclick="window.location.href='chat.html'">前往聊天室</button>
+  </div>
+
+  <script type="module">
+    import { auth } from './firebase.js';
+    import { applyActionCode, confirmPasswordReset } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+
+    const statusTitle = document.getElementById('statusTitle');
+    const statusMessage = document.getElementById('statusMessage');
+    const actionBtn = document.getElementById('actionBtn');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const mode = urlParams.get('mode');
+      const actionCode = urlParams.get('oobCode');
+
+      if (!actionCode) {
+        showError('無效的請求，缺少驗證碼。');
+        return;
+      }
+
+      try {
+        if (mode === 'verifyEmail') {
+          await applyActionCode(auth, actionCode);
+          showSuccess('信箱驗證成功！', '您的電子郵件已成功驗證，現在可以在聊天室中發言了。', '前往聊天室', 'chat.html');
+        } else if (mode === 'resetPassword') {
+          statusTitle.textContent = '重設密碼';
+          statusMessage.innerHTML = `
+            <input type="password" id="newPwd" placeholder="請輸入新密碼(至少6碼)" style="width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--input); color: var(--text); outline: none;" />
+          `;
+          actionBtn.textContent = '確認重設';
+          actionBtn.style.display = 'block';
+          actionBtn.onclick = async () => {
+            const newPwd = document.getElementById('newPwd').value;
+            if (newPwd.length < 6) {
+              alert('密碼需至少 6 碼');
+              return;
+            }
+            actionBtn.disabled = true;
+            try {
+              await confirmPasswordReset(auth, actionCode, newPwd);
+              showSuccess('密碼重設成功', '您現在可以使用新密碼登入了。', '前往登入', 'login.html');
+            } catch (err) {
+              showError('密碼重設失敗：' + (err.message || '連結可能已失效'));
+            }
+          };
+        } else {
+          showError('未知的操作模式。');
+        }
+      } catch (error) {
+        let msg = '操作失敗，連結可能已過期或被使用過。';
+        if (error.code === 'auth/invalid-action-code') msg = '驗證碼無效或已過期。';
+        showError(msg);
+      }
+    });
+
+    function showSuccess(title, msg, btnText, href) {
+      statusTitle.textContent = title;
+      statusTitle.style.color = '#00aaff';
+      statusMessage.textContent = msg;
+      actionBtn.textContent = btnText;
+      actionBtn.style.display = 'block';
+      actionBtn.onclick = () => window.location.href = href;
+    }
+
+    function showError(msg) {
+      statusTitle.textContent = '發生錯誤';
+      statusTitle.style.color = '#ff6b6b';
+      statusMessage.textContent = msg;
+      actionBtn.textContent = '返回登入';
+      actionBtn.style.display = 'block';
+      actionBtn.onclick = () => window.location.href = 'login.html';
+    }
+  </script>
+</body>
+
+</html>
