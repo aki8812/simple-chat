@@ -90,6 +90,7 @@
       statusMessage.textContent = msg;
       actionBtn.textContent = btnText;
       actionBtn.style.display = 'block';
+      actionBtn.disabled = false;
       actionBtn.onclick = () => window.location.href = href;
     }
 
@@ -99,6 +100,7 @@
       statusMessage.textContent = msg;
       actionBtn.textContent = '返回登入';
       actionBtn.style.display = 'block';
+      actionBtn.disabled = false;
       actionBtn.onclick = () => window.location.href = 'login.html';
     }
   </script>
