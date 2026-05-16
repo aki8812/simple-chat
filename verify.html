@@ -46,12 +46,22 @@
         } else if (mode === 'resetPassword') {
           statusTitle.textContent = '重設密碼';
           statusMessage.innerHTML = `
-            <input type="password" id="newPwd" placeholder="請輸入新密碼(至少6碼)" style="width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--input); color: var(--text); outline: none;" />
+            <div class="password-wrapper" style="margin-bottom: 16px;">
+              <input type="password" id="newPwd" placeholder="請輸入新密碼(至少6碼)" style="margin: 0;" />
+              <span id="togglePassword" title="顯示/隱藏密碼">👁️</span>
+            </div>
           `;
+          
+          const togglePwd = document.getElementById('togglePassword');
+          const newPwdInput = document.getElementById('newPwd');
+          togglePwd.addEventListener('click', () => {
+            newPwdInput.type = newPwdInput.type === 'password' ? 'text' : 'password';
+          });
+
           actionBtn.textContent = '確認重設';
           actionBtn.style.display = 'block';
           actionBtn.onclick = async () => {
-            const newPwd = document.getElementById('newPwd').value;
+            const newPwd = newPwdInput.value;
             if (newPwd.length < 6) {
               alert('密碼需至少 6 碼');
               return;

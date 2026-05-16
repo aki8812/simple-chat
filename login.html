@@ -104,6 +104,14 @@
       errorMsg.textContent = '';
       const emailVal = (email.value || '').trim();
       if (!emailVal) { errorMsg.textContent = '請先輸入電子郵件再按重設'; return; }
+      
+      const ok = await showModal({ 
+        title: '確認重設密碼', 
+        content: `確定要發送密碼重設信件至 <b>${emailVal}</b> 嗎？`, 
+        showCancel: true 
+      });
+      if (!ok) return;
+
       try {
         await sendPasswordResetEmail(auth, emailVal);
         await showModal({ title: '通知', content: '重設密碼連結已寄出，請查收郵件。' });
