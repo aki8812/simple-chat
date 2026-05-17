@@ -13,10 +13,22 @@
 </head>
 
 <body>
-  <div class="app">
+  <div class="header-bar">
+    <button id="toggleSidebarBtn" class="hamburger-btn" aria-label="選單">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+    <div class="header-brand" id="brandBtn">SimpleChat</div>
+    <div class="header-right">
+      <input id="newNickname" maxlength="24" placeholder="更改暱稱（3–24 字）" />
+      <button id="saveNickname">更新</button>
+      <button id="logout" class="danger">登出</button>
+    </div>
+  </div>
+  <div class="app sidebar-open">
     <aside class="sidebar">
       <div class="sidebar-content">
-        <div class="brand" id="brandBtn">SimpleChat</div>
         <div id="userListContainer">
           <div class="userlist-loading" style="padding: 6px 8px;">載入使用者列表中...</div>
         </div>
@@ -34,11 +46,6 @@
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
         </div>
-        <div class="right">
-          <input id="newNickname" maxlength="24" placeholder="更改暱稱（3–24 字）" />
-          <button id="saveNickname">更新</button>
-          <button id="logout" class="danger">登出</button>
-        </div>
       </header>
       <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
       <div class="input-area">
@@ -46,7 +53,7 @@
           <div id="mentionList" class="mention-list hidden"></div>
           <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false" data-placeholder="載入中..."></div>
         </div>
-        <button id="sendBtn" type="button" disabled title="發送訊息">
+        <button id="sendBtn" type="button" disabled>
           <svg viewBox="0 0 24 24">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
           </svg>
@@ -415,6 +422,7 @@
       elements.saveNickBtn.onclick = changeNickname;
       elements.brandBtn.onclick = () => location.reload();
       elements.manageBtn.onclick = () => window.location.href = 'admin.html';
+
       elements.resendVerify.onclick = async () => {
         try {
           await sendEmailVerification(appState.currentUser);
@@ -659,6 +667,9 @@
         navigator.serviceWorker.register('/sw.js');
       });
     }
+    document.getElementById('toggleSidebarBtn').onclick = () => {
+      document.querySelector('.app').classList.toggle('sidebar-open');
+    };
   </script>
 </body>
 

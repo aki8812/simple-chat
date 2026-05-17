@@ -25,20 +25,83 @@ body {
   color: var(--text);
 }
 
-.app {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  height: 100vh;
-  transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.header-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 48px;
+  background: var(--bg2);
+  border-bottom: 1px solid #1f2225;
+  position: relative;
+  z-index: 100;
+  flex-shrink: 0;
 }
 
-.app.sidebar-collapsed {
-  grid-template-columns: 0px 1fr;
+.hamburger-btn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.hamburger-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.hamburger-btn span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 1px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+}
+
+.header-brand {
+  font-weight: 700;
+  font-size: 18px;
+  opacity: .9;
+  cursor: pointer;
+  user-select: none;
+  margin-left: 4px;
+}
+
+.header-right {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.header-right input {
+  background: #1e2124;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.app {
+  display: flex;
+  height: calc(100vh - 48px);
+  position: relative;
+  overflow: hidden;
 }
 
 @supports (height: 100dvh) {
   .app {
-    height: 100dvh;
+    height: calc(100dvh - 48px);
   }
 }
 
@@ -47,8 +110,16 @@ body {
   border-right: 1px solid #1f2225;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  width: 240px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-left: 0;
+}
+
+.app:not(.sidebar-open) .sidebar {
+  margin-left: -240px;
 }
 
 .sidebar-content {
@@ -56,14 +127,6 @@ body {
   padding: 12px 12px 0 12px;
   overflow-y: auto;
   flex: 1;
-}
-
-.sidebar .brand {
-  font-weight: 700;
-  margin-bottom: 8px;
-  opacity: .9;
-  cursor: pointer;
-  user-select: none;
 }
 
 .userrow {
@@ -114,37 +177,22 @@ body {
 .main {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  height: 100vh;
-}
-
-@supports (height: 100dvh) {
-  .main {
-    height: 100dvh;
-  }
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .topbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 10px;
-  border-bottom: 1px solid #1f2225;
-  background: var(--bg2);
   gap: 8px;
 }
 
-.topbar .right {
-  display: flex;
-  gap: 6px;
-  align-items: center
-}
-
-.topbar input {
-  background: #1e2124;
-  border: 1px solid #444;
-  color: #fff;
-  padding: 6px 8px;
-  border-radius: 6px
+.topbar:has(.banner:not(.hidden)) {
+  padding: 10px;
+  border-bottom: 1px solid #1f2225;
+  background: var(--bg2);
 }
 
 button {
@@ -503,11 +551,7 @@ button.danger:hover {
   background-color: #3a9d5a;
 }
 
-@media (max-width: 820px) {
-  .app {
-    grid-template-columns: 240px 1fr;
-  }
-}
+
 
 .sidebar-content::-webkit-scrollbar,
 .chat-box::-webkit-scrollbar {
