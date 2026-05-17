@@ -8,7 +8,7 @@ const firebaseConfig = {
   authDomain: "simple-chat-41e8d.firebaseapp.com",
   databaseURL: "https://simple-chat-41e8d-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "simple-chat-41e8d",
-  storageBucket: "simple-chat-41e8d.appspot.com",
+  storageBucket: "simple-chat-41e8d.firebasestorage.app",
   messagingSenderId: "181779135449",
   appId: "1:181779135449:web:6e87dcfd5a72b2c1b1f7c8"
 };

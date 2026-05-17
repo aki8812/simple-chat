@@ -29,7 +29,7 @@
     <script type="module">
         import { auth, db } from './firebase.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-        import { ref, onValue, get, set, remove } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+        import { ref, onValue, get, set, remove, runTransaction, update } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
         const listBox = document.getElementById('listBox');
         const modalOverlay = document.getElementById('modalOverlay');

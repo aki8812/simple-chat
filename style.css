@@ -160,14 +160,16 @@ body {
 }
 
 #adminPanel {
-  padding: 12px;
+  padding: 10px;
   border-top: 1px solid #1f2225;
+  background: var(--bg2);
 }
 
 #manageBtn {
   width: 100%;
   background-color: var(--brand2);
   text-align: center;
+  padding: 10px;
 }
 
 #manageBtn:hover {
@@ -610,4 +612,14 @@ button.danger:hover {
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
+}
+
+@media (max-width: 768px) {
+  .header-right {
+    display: none;
+  }
+
+  .input-area {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  }
 }
