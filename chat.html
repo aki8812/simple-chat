@@ -76,7 +76,13 @@
             data-placeholder="載入中..."></div>
         </div>
         <button id="emojiBtn" type="button" class="emoji-btn">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="10" r="1.2" fill="currentColor"/><circle cx="15.5" cy="10" r="1.2" fill="currentColor"/><path d="M8 14.5c0 0 1.5 2.5 4 2.5s4-2.5 4-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+            <circle cx="8.5" cy="10" r="1.2" fill="currentColor" />
+            <circle cx="15.5" cy="10" r="1.2" fill="currentColor" />
+            <path d="M8 14.5c0 0 1.5 2.5 4 2.5s4-2.5 4-2.5" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" />
+          </svg>
         </button>
         <button id="sendBtn" type="button" disabled>
           <svg viewBox="0 0 24 24">
@@ -786,7 +792,7 @@
         const deletes = [];
         msgsSnap.forEach(s => { if (s.val().uid === uid) deletes.push(remove(ref(db, `messages/${s.key}`))); });
         await Promise.all(deletes);
-        try { await deleteObject(storageRef(storage, `avatars/${uid}`)); } catch {}
+        try { await deleteObject(storageRef(storage, `avatars/${uid}`)); } catch { }
         elements.userCard.classList.add('hidden');
         showModal({ title: '完成', content: `已刪除 ${nickname} 的帳號` });
       } catch { showModal({ title: '錯誤', content: '刪除失敗' }); }
@@ -876,7 +882,7 @@
           await remove(ref(db, `users/${uid}`));
           await remove(ref(db, `admins/${uid}`));
           await remove(ref(db, `bans/${uid}`));
-          try { await deleteObject(storageRef(storage, `avatars/${uid}`)); } catch {}
+          try { await deleteObject(storageRef(storage, `avatars/${uid}`)); } catch { }
           await deleteUser(currentUser);
           window.location.href = 'login.html';
         } catch { showModal({ title: '錯誤', content: '刪除失敗，請重新登入後再試' }); }
@@ -886,7 +892,7 @@
           try {
             const uid = currentUser.uid;
             const avatarRef = storageRef(storage, `avatars/${uid}`);
-            try { await deleteObject(avatarRef); } catch {}
+            try { await deleteObject(avatarRef); } catch { }
             await uploadBytes(avatarRef, appState.pendingAvatarBlob, { contentType: 'image/webp' });
             const url = await getDownloadURL(avatarRef);
             await update(ref(db, `users/${uid}/profile`), { avatarUrl: url });
@@ -1075,15 +1081,15 @@
       });
     }
     const EMOJIS = [
-      '😀','😂','🤣','😊','😍','🥰','😘','😎','🤩','🥳',
-      '😏','😒','😔','😢','😭','😤','🤯','😱','🥶','🤢',
-      '😇','🤓','🤡','😈','👿','💀','☠️','💩','🤮','🥴',
-      '🙄','😴','🤤','😬','🫠','🫡','🫣','🫢','🤫','🤔',
-      '👍','👎','👏','🙌','🤝','✌️','🤞','💪','🙏','👌',
-      '🖕','👋','🤙','✋','🫶','🤟','🤘','👊','🫰','🤌',
-      '❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','❤️‍🔥',
-      '🔥','⭐','🎉','🎊','💯','✅','❌','⚠️','💬','👀',
-      '👻','🤖','👽','🐶','🐱','🌈','☀️','🌙','🍕','🍺',
+      '😀', '😂', '🤣', '😊', '😍', '🥰', '😘', '😎', '🤩', '🥳',
+      '😏', '😒', '😔', '😢', '😭', '😤', '🤯', '😱', '🥶', '🤢',
+      '😇', '🤓', '🤡', '😈', '👿', '💀', '☠️', '💩', '🤮', '🥴',
+      '🙄', '😴', '🤤', '😬', '🫠', '🫡', '🫣', '🫢', '🤫', '🤔',
+      '👍', '👎', '👏', '🙌', '🤝', '✌️', '🤞', '💪', '🙏', '👌',
+      '🖕', '👋', '🤙', '✋', '🫶', '🤟', '🤘', '👊', '🫰', '🤌',
+      '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💔', '❤️‍🔥',
+      '🔥', '⭐', '🎉', '🎊', '💯', '✅', '❌', '⚠️', '💬', '👀',
+      '👻', '🤖', '👽', '🐶', '🐱', '🌈', '☀️', '🌙', '🤡', '🍺',
     ];
     const emojiGrid = document.querySelector('.emoji-grid');
     const emojiPanel = document.getElementById('emojiPanel');
