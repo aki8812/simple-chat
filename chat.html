@@ -51,7 +51,8 @@
       <div class="input-area">
         <div class="input-container">
           <div id="mentionList" class="mention-list hidden"></div>
-          <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false" data-placeholder="載入中..."></div>
+          <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"
+            data-placeholder="載入中..."></div>
         </div>
         <button id="sendBtn" type="button" disabled>
           <svg viewBox="0 0 24 24">
@@ -241,7 +242,7 @@
       elements.sendBtn.disabled = isDisabled;
       const placeholder = isDisabled
         ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
-        : '輸入訊息...（可 @暱稱）';
+        : '輸入訊息...';
       elements.inputEl.setAttribute('data-placeholder', placeholder);
 
       if (myProfile) elements.newNickEl.value = myProfile.nickname || '';
@@ -552,7 +553,7 @@
       elements.inputEl.innerText = newText;
       hideMentionList();
       elements.inputEl.focus();
-      
+
       const newPos = lastAtIdx + nickname.length + 2;
       const range = document.createRange();
       const sel = window.getSelection();
@@ -651,7 +652,7 @@
       if (!text) return '';
       const usersByNick = new Map();
       Array.from(appState.users.values()).forEach(u => usersByNick.set(u.nickname, u.uid));
-      
+
       const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
         if (name === 'everyone') return `${sp}<span class="mention">@everyone</span>`;
