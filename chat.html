@@ -673,6 +673,9 @@
     document.getElementById('toggleSidebarBtn').onclick = () => {
       document.querySelector('.app').classList.toggle('sidebar-open');
     };
+    if (window.innerWidth <= 768) {
+      document.querySelector('.app').classList.remove('sidebar-open');
+    }
   </script>
 </body>
 
