@@ -63,32 +63,43 @@
       </div>
       <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
       <div class="input-area">
-        <div class="input-container">
-          <div id="mentionList" class="mention-list hidden"></div>
-          <div id="emojiPanel" class="emoji-panel hidden">
-            <div class="emoji-header">
-              <span>表情符號</span>
-              <button id="emojiClose" class="emoji-close-btn">✕</button>
+        <div id="imagePreviewStrip" class="image-preview-strip hidden"></div>
+        <div class="input-row">
+          <div class="input-container">
+            <div id="mentionList" class="mention-list hidden"></div>
+            <div id="emojiPanel" class="emoji-panel hidden">
+              <div class="emoji-header">
+                <span>表情符號</span>
+                <button id="emojiClose" class="emoji-close-btn">✕</button>
+              </div>
+              <div class="emoji-grid"></div>
             </div>
-            <div class="emoji-grid"></div>
+            <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"
+              data-placeholder="載入中..."></div>
           </div>
-          <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"
-            data-placeholder="載入中..."></div>
+          <button id="attachBtn" type="button" class="attach-btn">
+            <svg viewBox="0 0 24 24">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <input type="file" id="chatImageInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple
+            style="display:none">
+          <button id="emojiBtn" type="button" class="emoji-btn">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+              <circle cx="8.5" cy="10" r="1.2" fill="currentColor" />
+              <circle cx="15.5" cy="10" r="1.2" fill="currentColor" />
+              <path d="M8 14.5c0 0 1.5 2.5 4 2.5s4-2.5 4-2.5" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" />
+            </svg>
+          </button>
+          <button id="sendBtn" type="button" disabled>
+            <svg viewBox="0 0 24 24">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+            </svg>
+          </button>
         </div>
-        <button id="emojiBtn" type="button" class="emoji-btn">
-          <svg viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
-            <circle cx="8.5" cy="10" r="1.2" fill="currentColor" />
-            <circle cx="15.5" cy="10" r="1.2" fill="currentColor" />
-            <path d="M8 14.5c0 0 1.5 2.5 4 2.5s4-2.5 4-2.5" fill="none" stroke="currentColor" stroke-width="1.5"
-              stroke-linecap="round" />
-          </svg>
-        </button>
-        <button id="sendBtn" type="button" disabled>
-          <svg viewBox="0 0 24 24">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
-          </svg>
-        </button>
       </div>
     </main>
   </div>
@@ -97,7 +108,14 @@
   <div id="userCard" class="popup hidden"></div>
   <div id="profileModal" class="profile-modal hidden"></div>
   <div id="cropModal" class="crop-modal hidden"></div>
-  <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
+  <input type="file" id="avatarFileInput" accept="image/*" style="display:none">
+  <div id="fullscreenViewer" class="fullscreen-viewer hidden">
+    <button id="fullscreenClose" class="fullscreen-close">✕</button>
+    <button id="fullscreenPrev" class="fullscreen-nav fullscreen-prev">❮</button>
+    <button id="fullscreenNext" class="fullscreen-nav fullscreen-next">❯</button>
+    <img id="fullscreenImg" src="" alt="">
+    <div id="fullscreenCounter" class="fullscreen-counter"></div>
+  </div>
   <script type="module">
     import { auth, db, storage } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload, deleteUser } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
@@ -132,6 +150,15 @@
       sidebarProfile: document.getElementById('sidebarProfile'),
       profileBtnAdmin: document.getElementById('profileBtnAdmin'),
       profileBtnNormal: document.getElementById('profileBtnNormal'),
+      attachBtn: document.getElementById('attachBtn'),
+      chatImageInput: document.getElementById('chatImageInput'),
+      imagePreviewStrip: document.getElementById('imagePreviewStrip'),
+      fullscreenViewer: document.getElementById('fullscreenViewer'),
+      fullscreenImg: document.getElementById('fullscreenImg'),
+      fullscreenClose: document.getElementById('fullscreenClose'),
+      fullscreenPrev: document.getElementById('fullscreenPrev'),
+      fullscreenNext: document.getElementById('fullscreenNext'),
+      fullscreenCounter: document.getElementById('fullscreenCounter'),
     };
 
     const appState = {
@@ -152,6 +179,9 @@
       selectedMessages: new Set(),
       profileDirty: false,
       pendingAvatarBlob: null,
+      pendingImages: [],
+      fullscreenImages: [],
+      fullscreenIndex: 0,
     };
 
     function saveMentionHistory(nickname) {
@@ -417,6 +447,27 @@
       const authorUser = users.get(msg.uid);
       const authorName = authorUser?.nickname || msg.nickname || '...';
       const bubbleAvatarHtml = authorUser?.avatarUrl ? `<img class="bubble-avatar" src="${authorUser.avatarUrl}" alt="">` : '';
+
+      let textHtml = '';
+      if (msg.text) {
+        textHtml = `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`;
+      }
+
+      let imagesHtml = '';
+      if (msg.images && msg.images.length > 0) {
+        const imgCount = msg.images.length;
+        let gridClass = 'bubble-images';
+        if (imgCount === 2) gridClass += ' grid-2';
+        else if (imgCount === 3) gridClass += ' grid-3';
+        else if (imgCount >= 4) gridClass += ' grid-4';
+
+        imagesHtml = `<div class="${gridClass}">`;
+        msg.images.forEach((url, idx) => {
+          imagesHtml += `<img src="${url}" class="bubble-img" data-urls='${JSON.stringify(msg.images)}' data-idx="${idx}" alt="圖片" loading="lazy">`;
+        });
+        imagesHtml += `</div>`;
+      }
+
       wrap.innerHTML = `
         <div class="bubble">
             <div class="bubble-head">
@@ -424,15 +475,28 @@
                 <div class="bubble-name" data-uid="${msg.uid}">${authorName}</div>
                 ${deleteBtnHtml}
             </div>
-            <div class="bubble-text">${renderWithMentions(msg.text)}</div>
+            ${textHtml}
+            ${imagesHtml}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
       return wrap;
     }
 
+    async function checkInput() {
+      const text = elements.inputEl.innerText.trim();
+      const hasImages = appState.pendingImages && appState.pendingImages.length > 0;
+      elements.sendBtn.disabled = (!text && !hasImages) || elements.inputEl.getAttribute('contenteditable') === 'false';
+    }
+
     async function sendMessage() {
       const text = elements.inputEl.innerText.trim();
-      if (!text) return;
+      const originalHtml = elements.inputEl.innerHTML;
+      const images = appState.pendingImages;
+      if (!text && images.length === 0) return;
+
+      elements.sendBtn.disabled = true;
+      elements.attachBtn.disabled = true;
+
       const myProfile = appState.users.get(appState.currentUser.uid);
       try {
         const mentionRegex = /@([\p{L}\p{N}_-]{3,24})/gu;
@@ -440,13 +504,45 @@
         while ((match = mentionRegex.exec(text)) !== null) {
           saveMentionHistory(match[1]);
         }
-        await push(ref(db, 'messages'), {
-          uid: appState.currentUser.uid, text, time: Date.now(), nickname: myProfile.nickname,
-        });
+
+        const imageUrls = [];
+        if (images.length > 0) {
+          elements.inputEl.innerText = '上傳圖片中...';
+          elements.inputEl.setAttribute('contenteditable', 'false');
+          for (const file of images) {
+            const ext = file.name.split('.').pop();
+            const fileName = `chat-images/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+            const imgRef = storageRef(storage, fileName);
+            await uploadBytes(imgRef, file);
+            const url = await getDownloadURL(imgRef);
+            imageUrls.push(url);
+          }
+        }
+
+        const msgData = {
+          uid: appState.currentUser.uid,
+          time: Date.now(),
+          nickname: myProfile.nickname,
+        };
+        if (text) msgData.text = text;
+        if (imageUrls.length > 0) msgData.images = imageUrls;
+
+        await push(ref(db, 'messages'), msgData);
+
         elements.inputEl.innerHTML = '';
+        appState.pendingImages = [];
+        renderImagePreviewStrip();
         hideMentionList();
         document.getElementById('emojiPanel').classList.add('hidden');
-      } catch { showModal({ title: '錯誤', content: '訊息傳送失敗。' }); }
+      } catch (e) {
+        showModal({ title: '錯誤', content: '訊息傳送失敗。' });
+        console.error(e);
+        elements.inputEl.innerHTML = originalHtml;
+      } finally {
+        elements.inputEl.setAttribute('contenteditable', 'true');
+        elements.attachBtn.disabled = false;
+        checkInput();
+      }
     }
 
     function setupEventListeners() {
@@ -482,7 +578,55 @@
         }
         if (e.key === ' ') hideMentionList();
       };
-      elements.inputEl.oninput = handleInput;
+      elements.inputEl.oninput = () => {
+        checkInput();
+        handleInput();
+      };
+
+      elements.attachBtn.onclick = () => {
+        elements.chatImageInput.click();
+      };
+
+      elements.chatImageInput.onchange = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+        appState.pendingImages = appState.pendingImages.concat(files);
+        renderImagePreviewStrip();
+        checkInput();
+        elements.chatImageInput.value = '';
+      };
+
+      elements.inputEl.addEventListener('paste', (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        const files = [];
+        for (let item of items) {
+          if (item.type.indexOf('image/') === 0) {
+            files.push(item.getAsFile());
+          }
+        }
+        if (files.length > 0) {
+          e.preventDefault();
+          appState.pendingImages = appState.pendingImages.concat(files);
+          renderImagePreviewStrip();
+          checkInput();
+        }
+      });
+
+
+      elements.fullscreenClose.onclick = closeFullscreenViewer;
+      elements.fullscreenPrev.onclick = (e) => { e.stopPropagation(); navigateFullscreen(-1); };
+      elements.fullscreenNext.onclick = (e) => { e.stopPropagation(); navigateFullscreen(1); };
+      elements.fullscreenViewer.onclick = (e) => {
+        if (e.target === elements.fullscreenViewer) closeFullscreenViewer();
+      };
+      document.addEventListener('keydown', (e) => {
+        if (!elements.fullscreenViewer.classList.contains('hidden')) {
+          if (e.key === 'Escape') closeFullscreenViewer();
+          else if (e.key === 'ArrowLeft') navigateFullscreen(-1);
+          else if (e.key === 'ArrowRight') navigateFullscreen(1);
+        }
+      });
+
       elements.logoutBtn.onclick = async () => {
         const ok = await showModal({ title: '確認', content: '確定要登出嗎？', showCancel: true });
         if (ok) signOut(auth);
@@ -557,6 +701,14 @@
           }
           return;
         }
+
+        if (e.target.classList.contains('bubble-img')) {
+          const urls = JSON.parse(e.target.dataset.urls);
+          const idx = parseInt(e.target.dataset.idx, 10);
+          openFullscreenViewer(urls, idx);
+          return;
+        }
+
         if (e.target.classList.contains('del-btn')) {
           const key = e.target.dataset.key;
           const ok = await showModal({ title: '確認', content: '確定要刪除此訊息？', showCancel: true });
@@ -1053,6 +1205,71 @@
         return uid ? `${sp}<span class="mention" data-uid="${uid}">@${name}</span>` : m;
       });
     }
+
+    function renderImagePreviewStrip() {
+      const container = elements.imagePreviewStrip;
+      if (appState.pendingImages.length === 0) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+      }
+      container.classList.remove('hidden');
+      container.innerHTML = '';
+      appState.pendingImages.forEach((file, idx) => {
+        const url = URL.createObjectURL(file);
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+        div.innerHTML = `
+          <img src="${url}" alt="">
+          <button class="preview-remove" data-idx="${idx}">✕</button>
+        `;
+        container.appendChild(div);
+      });
+      container.querySelectorAll('.preview-remove').forEach(btn => {
+        btn.onclick = () => {
+          const idx = parseInt(btn.dataset.idx, 10);
+          appState.pendingImages.splice(idx, 1);
+          renderImagePreviewStrip();
+          checkInput();
+        };
+      });
+    }
+
+    function openFullscreenViewer(urls, startIdx = 0) {
+      appState.fullscreenImages = urls;
+      appState.fullscreenIndex = startIdx;
+      updateFullscreenView();
+      elements.fullscreenViewer.classList.remove('hidden');
+    }
+
+    function closeFullscreenViewer() {
+      elements.fullscreenViewer.classList.add('hidden');
+      appState.fullscreenImages = [];
+      elements.fullscreenImg.src = '';
+    }
+
+    function navigateFullscreen(dir) {
+      if (appState.fullscreenImages.length <= 1) return;
+      let newIdx = appState.fullscreenIndex + dir;
+      if (newIdx < 0) newIdx = appState.fullscreenImages.length - 1;
+      if (newIdx >= appState.fullscreenImages.length) newIdx = 0;
+      appState.fullscreenIndex = newIdx;
+      updateFullscreenView();
+    }
+
+    function updateFullscreenView() {
+      const urls = appState.fullscreenImages;
+      if (!urls || urls.length === 0) return;
+      const idx = appState.fullscreenIndex;
+      elements.fullscreenImg.src = urls[idx];
+      elements.fullscreenCounter.textContent = `${idx + 1} / ${urls.length}`;
+
+      const showNav = urls.length > 1;
+      elements.fullscreenPrev.style.display = showNav ? 'flex' : 'none';
+      elements.fullscreenNext.style.display = showNav ? 'flex' : 'none';
+      elements.fullscreenCounter.style.display = showNav ? 'block' : 'none';
+    }
+
     function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
   </script>
   <script>
