@@ -27,9 +27,10 @@
     <div id="modalOverlay" class="modal-overlay hidden"></div>
     <div id="customModal" class="popup hidden"></div>
     <script type="module">
-        import { auth, db } from './firebase.js';
+        import { auth, db, storage } from './firebase.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-        import { ref, onValue, get, set, remove, runTransaction, update } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+        import { ref, onValue, get, set, remove, runTransaction, update, query, orderByChild } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+        import { ref as storageRef, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js';
 
         const listBox = document.getElementById('listBox');
         const modalOverlay = document.getElementById('modalOverlay');
@@ -157,6 +158,12 @@
         `;
         }
 
+        const DEFAULT_AVATAR_SVG = '<svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>';
+        function adminAvatarHtml(user) {
+          if (user && user.avatarUrl) return `<img class="admin-avatar" src="${user.avatarUrl}" alt="">`;
+          return `<div class="admin-avatar-default">${DEFAULT_AVATAR_SVG}</div>`;
+        }
+
         function createSectionHtml(title, userArray) {
             const rowsHtml = userArray.length > 0 ? userArray.map(createUserRowHtml).join('') : '<div class="empty">（無）</div>';
             return `<div class="section-title">${title}</div>${rowsHtml}`;
@@ -178,15 +185,17 @@
                         ${isBanned ? '解封鎖' : '封鎖'}
                     </button>
                     <button class="rename-btn" style="background: #7289da; color: #fff;">更改暱稱</button>
+                    <button class="delete-btn">刪除帳號</button>
                 `;
                 }
             }
             return `
-        <div class="member-row ${isAdmin ? 'admin' : ''}" data-uid="${user.uid}" style="cursor: pointer;">
+        <div class="member-row ${isAdmin ? 'admin' : ''} ${isBanned ? 'banned' : ''}" data-uid="${user.uid}" style="cursor: pointer;">
           <div class="member-head">
+            ${adminAvatarHtml(user)}
             <span class="name">${user.nickname || '（無暱稱）'}</span>
             ${isAdmin ? '<span class="tag-admin">[管理員]</span>' : ''}
-            <span class="toggle-arrow" style="color: var(--muted); font-size: 12px; pointer-events: none;">▼</span>
+            <span class="toggle-arrow" style="color: var(--muted); font-size: 12px; pointer-events: none; margin-left: auto;">▼</span>
           </div>
           <div class="member-body hidden" style="cursor: default;">
             <div>電子郵件：<span class="email">（點擊展開載入）</span></div>
@@ -203,7 +212,7 @@
             const uid = row.dataset.uid;
             const user = appState.users.get(uid);
 
-            if (target.matches('.promote-btn, .demote-btn, .ban-btn, .rename-btn')) {
+            if (target.matches('.promote-btn, .demote-btn, .ban-btn, .rename-btn, .delete-btn')) {
                 handleAdminAction(target, uid, user.nickname);
                 return;
             }
@@ -253,6 +262,9 @@
                     } catch (e) { showModal({ title: '錯誤', content: '操作失敗' }); }
                 }
                 return;
+            } else if (target.classList.contains('delete-btn')) {
+                adminDeleteUserFromAdmin(uid, nickname);
+                return;
             } else if (target.classList.contains('promote-btn')) {
                 confirmMsg = `確定要將 ${nickname} 設為管理員？`;
                 actionFn = () => set(ref(db, `admins/${uid}`), true);
@@ -269,6 +281,28 @@
                     try { await actionFn(); } catch { showModal({ title: '錯誤', content: '操作失敗' }); }
                 }
             }
+        }
+        async function adminDeleteUserFromAdmin(uid, nickname) {
+            const ok = await showModal({
+                title: '⚠️ 刪除帳號',
+                content: `<span style="color:#e02e2e;font-weight:700;">確定要刪除 ${nickname} 的帳號嗎？</span><br>此操作無法復原。`,
+                showCancel: true,
+                confirmText: '確認刪除'
+            });
+            if (!ok) return;
+            try {
+                const profile = appState.users.get(uid);
+                if (profile?.nicknameLower) await set(ref(db, `nicknames/${profile.nicknameLower}`), null);
+                await remove(ref(db, `users/${uid}`));
+                await remove(ref(db, `admins/${uid}`));
+                await remove(ref(db, `bans/${uid}`));
+                const msgsSnap = await get(query(ref(db, 'messages'), orderByChild('uid')));
+                const deletes = [];
+                msgsSnap.forEach(s => { if (s.val().uid === uid) deletes.push(remove(ref(db, `messages/${s.key}`))); });
+                await Promise.all(deletes);
+                try { await deleteObject(storageRef(storage, `avatars/${uid}`)); } catch {}
+                showModal({ title: '完成', content: `已刪除 ${nickname} 的帳號` });
+            } catch { showModal({ title: '錯誤', content: '刪除失敗' }); }
         }
         function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
     </script>

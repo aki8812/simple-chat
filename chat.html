@@ -269,9 +269,12 @@
 
     const DEFAULT_AVATAR_SVG = '<svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>';
 
-    function avatarHtml(user, className = 'avatar', defaultClass = 'avatar-default') {
-      if (user && user.avatarUrl) return `<img class="${className}" src="${user.avatarUrl}" alt="">`;
-      return `<div class="${defaultClass}">${DEFAULT_AVATAR_SVG}</div>`;
+    const AVATAR_OVERLAY_HTML = '<div class="avatar-overlay"><svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg><span>更改頭像</span></div>';
+
+    function avatarHtml(user, className = 'avatar', defaultClass = 'avatar-default', withOverlay = false) {
+      const overlay = withOverlay ? AVATAR_OVERLAY_HTML : '';
+      if (user && user.avatarUrl) return `<div style="position:relative;display:inline-block;"><img class="${className}" src="${user.avatarUrl}" alt="">${overlay}</div>`;
+      return `<div class="${defaultClass}">${DEFAULT_AVATAR_SVG}${overlay}</div>`;
     }
 
     function renderControls() {
@@ -405,10 +408,13 @@
       wrap.className = `chat-message ${isSelf ? 'self' : 'other'}`;
       wrap.dataset.msgId = key;
       const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
-      const authorName = users.get(msg.uid)?.nickname || msg.nickname || '...';
+      const authorUser = users.get(msg.uid);
+      const authorName = authorUser?.nickname || msg.nickname || '...';
+      const bubbleAvatarHtml = authorUser?.avatarUrl ? `<img class="bubble-avatar" src="${authorUser.avatarUrl}" alt="">` : '';
       wrap.innerHTML = `
         <div class="bubble">
             <div class="bubble-head">
+                ${bubbleAvatarHtml}
                 <div class="bubble-name" data-uid="${msg.uid}">${authorName}</div>
                 ${deleteBtnHtml}
             </div>
@@ -508,25 +514,40 @@
       elements.selectCancelBtn.onclick = () => exitSelectMode();
 
       let longPressTimer = null;
+      let longPressFired = false;
       elements.messagesBox.addEventListener('pointerdown', e => {
-        const msgEl = e.target.closest('.chat-message');
-        if (!msgEl || appState.selectMode) return;
+        if (appState.selectMode) return;
+        const bubble = e.target.closest('.bubble');
+        if (!bubble) return;
+        const msgEl = bubble.closest('.chat-message');
+        if (!msgEl) return;
         const key = msgEl.dataset.msgId;
         const msg = appState.messages.get(key);
         if (!msg) return;
         const canSelect = msg.uid === appState.currentUser.uid || appState.admins.has(appState.currentUser.uid);
         if (!canSelect) return;
-        longPressTimer = setTimeout(() => { longPressTimer = null; enterSelectMode(key); }, 600);
+        longPressFired = false;
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          longPressFired = true;
+          enterSelectMode(key);
+        }, 600);
       });
+      elements.messagesBox.addEventListener('pointermove', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
       elements.messagesBox.addEventListener('pointerup', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
-      elements.messagesBox.addEventListener('pointerleave', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
+      elements.messagesBox.addEventListener('contextmenu', e => { if (longPressFired) e.preventDefault(); });
 
       elements.messagesBox.addEventListener('click', async e => {
+        if (longPressFired) { longPressFired = false; return; }
         if (appState.selectMode) {
-          const msgEl = e.target.closest('.chat-message');
-          if (msgEl && msgEl.querySelector('.select-checkbox')) {
-            const key = msgEl.dataset.msgId;
-            toggleSelect(key);
+          const cb = e.target.closest('.select-checkbox');
+          if (cb) { toggleSelect(cb.dataset.msgKey); return; }
+          const bubble = e.target.closest('.bubble');
+          if (bubble) {
+            const msgEl = bubble.closest('.chat-message');
+            if (msgEl && msgEl.querySelector('.select-checkbox')) {
+              toggleSelect(msgEl.dataset.msgId);
+            }
           }
           return;
         }
@@ -780,7 +801,7 @@
       const banInfo = isBanned ? '<div style="color:#e02e2e;">⚠️ 你已被管理員封鎖</div>' : '';
       elements.profileModal.innerHTML = `
         <div class="profile-modal-header">
-          <div id="profileAvatarArea">${avatarHtml(myProfile, 'profile-modal-avatar', 'profile-modal-avatar-default')}</div>
+          <div id="profileAvatarArea">${avatarHtml(myProfile, 'profile-modal-avatar', 'profile-modal-avatar-default', true)}</div>
           <div class="profile-modal-info">
             <div class="profile-modal-nick">
               <span class="profile-modal-nick-text" id="profileNickText">${myProfile?.nickname || '未命名'}</span>
@@ -865,11 +886,14 @@
           try {
             const uid = currentUser.uid;
             const avatarRef = storageRef(storage, `avatars/${uid}`);
+            try { await deleteObject(avatarRef); } catch {}
             await uploadBytes(avatarRef, appState.pendingAvatarBlob, { contentType: 'image/webp' });
             const url = await getDownloadURL(avatarRef);
             await update(ref(db, `users/${uid}/profile`), { avatarUrl: url });
             appState.pendingAvatarBlob = null;
             appState.profileDirty = false;
+            elements.modalOverlay.classList.add('hidden');
+            elements.profileModal.classList.add('hidden');
             showModal({ title: '完成', content: '頭像已更新' });
           } catch { showModal({ title: '錯誤', content: '上傳失敗' }); }
         } else {
@@ -1053,9 +1077,13 @@
     const EMOJIS = [
       '😀','😂','🤣','😊','😍','🥰','😘','😎','🤩','🥳',
       '😏','😒','😔','😢','😭','😤','🤯','😱','🥶','🤢',
-      '👍','👎','👏','🙌','🤝','✌️','🤞','💪','🙏','❤️',
+      '😇','🤓','🤡','😈','👿','💀','☠️','💩','🤮','🥴',
+      '🙄','😴','🤤','😬','🫠','🫡','🫣','🫢','🤫','🤔',
+      '👍','👎','👏','🙌','🤝','✌️','🤞','💪','🙏','👌',
+      '🖕','👋','🤙','✋','🫶','🤟','🤘','👊','🫰','🤌',
+      '❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','❤️‍🔥',
       '🔥','⭐','🎉','🎊','💯','✅','❌','⚠️','💬','👀',
-      '😈','💀','👻','🤖','👽','🐶','🐱','🌈','☀️','🌙',
+      '👻','🤖','👽','🐶','🐱','🌈','☀️','🌙','🍕','🍺',
     ];
     const emojiGrid = document.querySelector('.emoji-grid');
     const emojiPanel = document.getElementById('emojiPanel');

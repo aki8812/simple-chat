@@ -39,7 +39,8 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: env(safe-area-inset-top, 0px) 12px 12px 12px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
   background: var(--bg2);
   border-bottom: 1px solid #1f2225;
 }
@@ -105,6 +106,41 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.member-head .admin-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #4f545c;
+  flex-shrink: 0;
+}
+
+.member-head .admin-avatar-default {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #4f545c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.member-head .admin-avatar-default svg {
+  width: 16px;
+  height: 16px;
+  fill: #8e9297;
+}
+
+.manage-area .delete-btn {
+  background-color: var(--red);
+  color: white;
+}
+
+.manage-area .delete-btn:hover {
+  background-color: #c83c3c;
 }
 
 .member-head .name {

@@ -317,7 +317,7 @@ body {
   border-radius: 10px;
   padding: 24px;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
-  z-index: 1100;
+  z-index: 1060;
   width: 360px;
   max-width: 90vw;
   max-height: 85vh;
@@ -341,10 +341,45 @@ body {
   background: #4f545c;
   transition: opacity 0.2s;
   flex-shrink: 0;
+  position: relative;
 }
 
 .profile-modal-avatar:hover {
   opacity: 0.8;
+}
+
+.profile-modal-avatar:hover .avatar-overlay,
+.profile-modal-avatar-default:hover .avatar-overlay {
+  opacity: 1;
+}
+
+.avatar-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.avatar-overlay svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+  margin-bottom: 2px;
+}
+
+.avatar-overlay span {
+  font-size: 10px;
+  color: #fff;
 }
 
 .profile-modal-avatar-default {
@@ -358,6 +393,7 @@ body {
   cursor: pointer;
   flex-shrink: 0;
   transition: opacity 0.2s;
+  position: relative;
 }
 
 .profile-modal-avatar-default:hover {
@@ -555,7 +591,7 @@ body {
 }
 
 .select-checkbox.checked::after {
-  content: '\u2713';
+  content: '\2713';
   color: #fff;
   font-size: 13px;
   font-weight: 700;
@@ -721,13 +757,21 @@ button.danger:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px
+  margin-bottom: 6px;
+}
+
+.bubble-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .bubble-name {
   font-weight: 700;
   opacity: .95;
-  cursor: pointer
+  cursor: pointer;
 }
 
 .bubble-text {
@@ -1095,9 +1139,10 @@ button.danger:hover {
 
 .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  max-height: 180px;
+  grid-template-columns: repeat(5, 1fr);
+  max-height: 200px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 6px;
   scrollbar-width: thin;
   scrollbar-color: #3b4050 #1c1f22;
