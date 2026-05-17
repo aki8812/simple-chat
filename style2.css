@@ -28,6 +28,7 @@ body {
   font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, -apple-system, sans-serif;
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .container {

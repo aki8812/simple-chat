@@ -29,8 +29,8 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
-  height: 48px;
+  padding: env(safe-area-inset-top, 0px) 12px 0 12px;
+  height: calc(48px + env(safe-area-inset-top, 0px));
   background: var(--bg2);
   border-bottom: 1px solid #1f2225;
   position: relative;
@@ -94,14 +94,14 @@ body {
 
 .app {
   display: flex;
-  height: calc(100vh - 48px);
+  height: calc(100vh - (48px + env(safe-area-inset-top, 0px)));
   position: relative;
   overflow: hidden;
 }
 
 @supports (height: 100dvh) {
   .app {
-    height: calc(100dvh - 48px);
+    height: calc(100dvh - (48px + env(safe-area-inset-top, 0px)));
   }
 }
 
