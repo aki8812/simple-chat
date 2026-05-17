@@ -161,7 +161,7 @@ body {
 
 #adminPanel {
   padding: 10px;
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  padding-bottom: env(safe-area-inset-bottom, 10px);
   border-top: 1px solid #1f2225;
   background: var(--bg2);
 }
@@ -257,7 +257,7 @@ button.danger:hover {
   position: sticky;
   bottom: 0;
   z-index: 5;
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  padding-bottom: env(safe-area-inset-bottom, 10px);
 }
 
 .input-area input {
@@ -621,9 +621,5 @@ button.danger:hover {
 @media (max-width: 768px) {
   .header-right {
     display: none;
-  }
-
-  .input-area {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
   }
 }
