@@ -3,7 +3,7 @@
   "short_name": "SimpleChat",
   "start_url": "/index.html",
   "display": "standalone",
-  "background_color": "#2c2f33",
+  "background_color": "#23272a",
   "theme_color": "#23272a",
   "description": "A simple real-time chat application.",
   "icons": [

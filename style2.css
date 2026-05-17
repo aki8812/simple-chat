@@ -23,7 +23,8 @@ body {
 body {
   margin: 0;
   color: var(--text);
-  background: radial-gradient(1000px 600px at 10% -10%, #2f3340 0%, var(--bg) 60%),
+  background-color: var(--bg);
+  background-image: radial-gradient(1000px 600px at 10% -10%, #2f3340 0%, var(--bg) 60%),
     radial-gradient(800px 500px at 90% 110%, #2b2f3a 0%, var(--bg) 60%);
   font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, -apple-system, sans-serif;
   display: flex;
