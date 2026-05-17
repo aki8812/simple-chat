@@ -36,7 +36,11 @@
         </div>
       </div>
       <div id="adminPanel" class="hidden">
+        <button id="profileBtnAdmin" class="profile-btn self-profile-btn"></button>
         <button id="manageBtn">成員管理</button>
+      </div>
+      <div id="sidebarProfile" class="sidebar-profile hidden">
+        <button id="profileBtnNormal" class="profile-btn self-profile-btn"></button>
       </div>
     </aside>
     <div id="sidebarOverlay" class="sidebar-overlay"></div>
@@ -50,6 +54,13 @@
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
         </div>
       </header>
+      <div id="selectBar" class="select-bar hidden">
+        <span class="select-bar-text">已選取 0 條訊息</span>
+        <div style="display:flex;gap:8px;">
+          <button id="selectDeleteBtn" class="danger">刪除</button>
+          <button id="selectCancelBtn">取消</button>
+        </div>
+      </div>
       <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
       <div class="input-area">
         <div class="input-container">
@@ -78,10 +89,14 @@
   <div id="modalOverlay" class="modal-overlay hidden"></div>
   <div id="customModal" class="popup hidden"></div>
   <div id="userCard" class="popup hidden"></div>
+  <div id="profileModal" class="profile-modal hidden"></div>
+  <div id="cropModal" class="crop-modal hidden"></div>
+  <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
   <script type="module">
-    import { auth, db } from './firebase.js';
-    import { onAuthStateChanged, signOut, sendEmailVerification, reload } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+    import { auth, db, storage } from './firebase.js';
+    import { onAuthStateChanged, signOut, sendEmailVerification, reload, deleteUser } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
     import { ref, push, onChildAdded, onChildRemoved, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt, endBefore } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js';
 
     const elements = {
       messagesBox: document.getElementById('messages'),
@@ -102,6 +117,15 @@
       customModal: document.getElementById('customModal'),
       mentionList: document.getElementById('mentionList'),
       toggleSidebarBtn: document.getElementById('toggleSidebarBtn'),
+      profileModal: document.getElementById('profileModal'),
+      cropModal: document.getElementById('cropModal'),
+      avatarFileInput: document.getElementById('avatarFileInput'),
+      selectBar: document.getElementById('selectBar'),
+      selectDeleteBtn: document.getElementById('selectDeleteBtn'),
+      selectCancelBtn: document.getElementById('selectCancelBtn'),
+      sidebarProfile: document.getElementById('sidebarProfile'),
+      profileBtnAdmin: document.getElementById('profileBtnAdmin'),
+      profileBtnNormal: document.getElementById('profileBtnNormal'),
     };
 
     const appState = {
@@ -118,6 +142,10 @@
       mentionHistory: JSON.parse(localStorage.getItem('mentionHistory') || '[]'),
       mentionIndex: 0,
       mentionItems: [],
+      selectMode: false,
+      selectedMessages: new Set(),
+      profileDirty: false,
+      pendingAvatarBlob: null,
     };
 
     function saveMentionHistory(nickname) {
@@ -239,16 +267,25 @@
       renderAllMessages(isInitial);
     }
 
+    const DEFAULT_AVATAR_SVG = '<svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>';
+
+    function avatarHtml(user, className = 'avatar', defaultClass = 'avatar-default') {
+      if (user && user.avatarUrl) return `<img class="${className}" src="${user.avatarUrl}" alt="">`;
+      return `<div class="${defaultClass}">${DEFAULT_AVATAR_SVG}</div>`;
+    }
+
     function renderControls() {
       const { currentUser, admins, bans, users } = appState;
       const myProfile = users.get(currentUser.uid);
       const isVerified = !!currentUser.emailVerified;
       const isBanned = bans.has(currentUser.uid);
       const hasNick = myProfile && myProfile.nickname;
+      const isAdmin = admins.has(currentUser.uid);
 
       elements.verifyBanner.classList.toggle('hidden', isVerified);
       elements.banBanner.classList.toggle('hidden', !isBanned);
-      elements.adminPanel.classList.toggle('hidden', !admins.has(currentUser.uid));
+      elements.adminPanel.classList.toggle('hidden', !isAdmin);
+      elements.sidebarProfile.classList.toggle('hidden', isAdmin);
 
       const isDisabled = !isVerified || isBanned || !hasNick;
       elements.inputEl.contentEditable = !isDisabled;
@@ -259,6 +296,10 @@
       elements.inputEl.setAttribute('data-placeholder', placeholder);
 
       if (myProfile) elements.newNickEl.value = myProfile.nickname || '';
+
+      const profileInner = `${avatarHtml(myProfile, 'profile-avatar', 'profile-avatar-default')}<span class="profile-nick">${myProfile?.nickname || '未命名'}</span>`;
+      elements.profileBtnAdmin.innerHTML = profileInner;
+      elements.profileBtnNormal.innerHTML = profileInner;
     }
 
     function renderUserList() {
@@ -272,7 +313,7 @@
         const isBanned = bans.has(u.uid);
         const classes = ['userrow', isMe && 'me', isAdmin && 'admin', isBanned && 'banned'].filter(Boolean).join(' ');
         const adminTag = isAdmin ? ' <span class="tag-admin">[管理員]</span>' : '';
-        return `<div class="${classes}" data-uid="${u.uid}">@${u.nickname || '未命名'}${adminTag}</div>`;
+        return `<div class="${classes}" data-uid="${u.uid}">${avatarHtml(u)}<span>${u.nickname || '未命名'}${adminTag}</span></div>`;
       }).join('');
 
       elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
@@ -437,6 +478,8 @@
       elements.saveNickBtn.onclick = changeNickname;
       elements.brandBtn.onclick = () => location.reload();
       elements.manageBtn.onclick = () => window.location.href = 'admin.html';
+      elements.profileBtnAdmin.onclick = () => openProfileModal();
+      elements.profileBtnNormal.onclick = () => openProfileModal();
 
       elements.resendVerify.onclick = async () => {
         try {
@@ -450,7 +493,43 @@
         const target = e.target.closest('.userrow');
         if (target) openUserCard(target.dataset.uid);
       });
+
+      elements.selectDeleteBtn.onclick = async () => {
+        const count = appState.selectedMessages.size;
+        if (count === 0) return;
+        const ok = await showModal({ title: '確認', content: `確定要刪除選取的 ${count} 條訊息？`, showCancel: true });
+        if (!ok) return;
+        try {
+          const deletes = Array.from(appState.selectedMessages).map(key => remove(ref(db, `messages/${key}`)));
+          await Promise.all(deletes);
+          exitSelectMode();
+        } catch { showModal({ title: '錯誤', content: '批次刪除失敗' }); }
+      };
+      elements.selectCancelBtn.onclick = () => exitSelectMode();
+
+      let longPressTimer = null;
+      elements.messagesBox.addEventListener('pointerdown', e => {
+        const msgEl = e.target.closest('.chat-message');
+        if (!msgEl || appState.selectMode) return;
+        const key = msgEl.dataset.msgId;
+        const msg = appState.messages.get(key);
+        if (!msg) return;
+        const canSelect = msg.uid === appState.currentUser.uid || appState.admins.has(appState.currentUser.uid);
+        if (!canSelect) return;
+        longPressTimer = setTimeout(() => { longPressTimer = null; enterSelectMode(key); }, 600);
+      });
+      elements.messagesBox.addEventListener('pointerup', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
+      elements.messagesBox.addEventListener('pointerleave', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
+
       elements.messagesBox.addEventListener('click', async e => {
+        if (appState.selectMode) {
+          const msgEl = e.target.closest('.chat-message');
+          if (msgEl && msgEl.querySelector('.select-checkbox')) {
+            const key = msgEl.dataset.msgId;
+            toggleSelect(key);
+          }
+          return;
+        }
         if (e.target.classList.contains('del-btn')) {
           const key = e.target.dataset.key;
           const ok = await showModal({ title: '確認', content: '確定要刪除此訊息？', showCancel: true });
@@ -618,31 +697,34 @@
       const banButtonHtml = canManage
         ? `<button id="banBtn" class="${isTargetBanned ? '' : 'danger'}">${isTargetBanned ? '解封鎖' : '封鎖此用戶'}</button>`
         : '';
+      const deleteAccountHtml = canManage && !isTargetAdmin
+        ? `<button id="adminDeleteBtn" class="danger">刪除帳號</button>`
+        : '';
       elements.userCard.innerHTML = `
         <div class="user-card">
-          <div class="card-name">@${targetUser.nickname} ${isTargetAdmin ? '<span class="tag-admin">[管理員]</span>' : ''}</div>
-          <div class="card-registered">註冊時間：${fmt(targetUser.registeredAt)}</div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            ${avatarHtml(targetUser, 'card-avatar', 'card-avatar-default')}
+            <div>
+              <div class="card-name">${targetUser.nickname} ${isTargetAdmin ? '<span class="tag-admin">[管理員]</span>' : ''}</div>
+              <div class="card-registered">註冊時間：${fmt(targetUser.registeredAt)}</div>
+            </div>
+          </div>
           <div class="card-actions">
             ${adminButtonHtml}
             ${banButtonHtml}
+            ${deleteAccountHtml}
             <button id="closeCard">關閉</button>
           </div>
         </div>`;
       elements.userCard.classList.remove('hidden');
-      const closeBtn = document.getElementById('closeCard');
-      if (closeBtn) {
-        closeBtn.onclick = () => {
-          elements.userCard.classList.add('hidden');
-        };
-      }
+      document.getElementById('closeCard').onclick = () => elements.userCard.classList.add('hidden');
       const banBtn = document.getElementById('banBtn');
       if (banBtn) {
         banBtn.onclick = async () => {
           const ok = await showModal({ title: '確認', content: isTargetBanned ? '確定要解封？' : '確定封鎖此用戶？', showCancel: true });
           if (!ok) return;
-          const targetRef = ref(db, `bans/${uid}`);
           try {
-            await (isTargetBanned ? remove(targetRef) : set(targetRef, true));
+            await (isTargetBanned ? remove(ref(db, `bans/${uid}`)) : set(ref(db, `bans/${uid}`), true));
             elements.userCard.classList.add('hidden');
           } catch { showModal({ title: '錯誤', content: '操作失敗' }); }
         };
@@ -653,13 +735,299 @@
           const actionText = isTargetAdmin ? '移除其管理員權限' : '將其設為管理員';
           const ok = await showModal({ title: '確認', content: `確定要${actionText}？`, showCancel: true });
           if (!ok) return;
-          const targetRef = ref(db, `admins/${uid}`);
           try {
-            await (isTargetAdmin ? remove(targetRef) : set(targetRef, true));
+            await (isTargetAdmin ? remove(ref(db, `admins/${uid}`)) : set(ref(db, `admins/${uid}`), true));
             elements.userCard.classList.add('hidden');
-          } catch (err) { showModal({ title: '錯誤', content: '操作失敗' }); }
+          } catch { showModal({ title: '錯誤', content: '操作失敗' }); }
         };
       }
+      const adminDeleteBtn = document.getElementById('adminDeleteBtn');
+      if (adminDeleteBtn) {
+        adminDeleteBtn.onclick = () => adminDeleteUser(uid, targetUser.nickname);
+      }
+    }
+
+    async function adminDeleteUser(uid, nickname) {
+      const ok = await showModal({
+        title: '⚠️ 刪除帳號',
+        content: `<span style="color:#e02e2e;font-weight:700;">確定要刪除 ${nickname} 的帳號嗎？</span><br>此操作無法復原，該用戶的所有訊息和頭像都將被刪除。`,
+        showCancel: true,
+        confirmText: '確認刪除'
+      });
+      if (!ok) return;
+      try {
+        const profile = appState.users.get(uid);
+        if (profile?.nicknameLower) await set(ref(db, `nicknames/${profile.nicknameLower}`), null);
+        await remove(ref(db, `users/${uid}`));
+        await remove(ref(db, `admins/${uid}`));
+        await remove(ref(db, `bans/${uid}`));
+        const msgsSnap = await get(query(ref(db, 'messages'), orderByChild('uid')));
+        const deletes = [];
+        msgsSnap.forEach(s => { if (s.val().uid === uid) deletes.push(remove(ref(db, `messages/${s.key}`))); });
+        await Promise.all(deletes);
+        try { await deleteObject(storageRef(storage, `avatars/${uid}`)); } catch {}
+        elements.userCard.classList.add('hidden');
+        showModal({ title: '完成', content: `已刪除 ${nickname} 的帳號` });
+      } catch { showModal({ title: '錯誤', content: '刪除失敗' }); }
+    }
+
+    function openProfileModal() {
+      const { currentUser, users, bans } = appState;
+      const myProfile = users.get(currentUser.uid);
+      const isBanned = bans.has(currentUser.uid);
+      appState.profileDirty = false;
+      appState.pendingAvatarBlob = null;
+      const banInfo = isBanned ? '<div style="color:#e02e2e;">⚠️ 你已被管理員封鎖</div>' : '';
+      elements.profileModal.innerHTML = `
+        <div class="profile-modal-header">
+          <div id="profileAvatarArea">${avatarHtml(myProfile, 'profile-modal-avatar', 'profile-modal-avatar-default')}</div>
+          <div class="profile-modal-info">
+            <div class="profile-modal-nick">
+              <span class="profile-modal-nick-text" id="profileNickText">${myProfile?.nickname || '未命名'}</span>
+              <div class="profile-modal-actions-inline">
+                <button id="profileEditNick">編輯</button>
+                <button id="profileLogout" class="danger">登出</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="profile-modal-body">
+          <div>註冊時間：${fmt(myProfile?.registeredAt)}</div>
+          ${banInfo}
+        </div>
+        <div class="profile-modal-footer">
+          <div class="profile-modal-footer-left">
+            <button id="profileDeleteAccount">刪除帳號</button>
+          </div>
+          <div class="profile-modal-footer-right">
+            <button id="profileSave">儲存</button>
+            <button id="profileClose" style="background:var(--brand2);">關閉</button>
+          </div>
+        </div>`;
+      elements.modalOverlay.classList.remove('hidden');
+      elements.profileModal.classList.remove('hidden');
+      const avatarArea = document.getElementById('profileAvatarArea');
+      avatarArea.onclick = () => elements.avatarFileInput.click();
+      elements.avatarFileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        openCropModal(file);
+        elements.avatarFileInput.value = '';
+      };
+      document.getElementById('profileEditNick').onclick = async () => {
+        const ok = await showModal({
+          title: '編輯暱稱',
+          content: `<input type="text" id="profileNickInput" value="${myProfile?.nickname || ''}" maxlength="24" style="width:100%;padding:8px;border-radius:4px;border:1px solid #3a3f45;background:#1e2124;color:#fff;outline:none;">`,
+          showCancel: true
+        });
+        if (!ok) return;
+        const newNick = document.getElementById('profileNickInput')?.value.trim();
+        if (!newNick || newNick.length < 3 || newNick.length > 24) return showModal({ title: '提示', content: '暱稱需 3–24 字' });
+        const uid = currentUser.uid;
+        const lower = newNick.toLowerCase();
+        const oldLower = myProfile?.nicknameLower || '';
+        if (lower === oldLower) return;
+        try {
+          const res = await runTransaction(ref(db, `nicknames/${lower}`), (cur) => (cur === null || cur === uid) ? uid : undefined);
+          if (!res.committed) return showModal({ title: '提示', content: '暱稱已被使用' });
+          await update(ref(db, `users/${uid}/profile`), { nickname: newNick, nicknameLower: lower });
+          if (oldLower) await set(ref(db, `nicknames/${oldLower}`), null);
+          document.getElementById('profileNickText').textContent = newNick;
+          showModal({ title: '完成', content: '暱稱已更新' });
+        } catch { showModal({ title: '錯誤', content: '更新失敗' }); }
+      };
+      document.getElementById('profileLogout').onclick = async () => {
+        const ok = await showModal({ title: '確認', content: '確定要登出嗎？', showCancel: true });
+        if (ok) signOut(auth);
+      };
+      document.getElementById('profileDeleteAccount').onclick = async () => {
+        const ok = await showModal({
+          title: '⚠️ 刪除帳號',
+          content: '<span style="color:#e02e2e;font-weight:700;">確定要刪除你的帳號嗎？</span><br>點擊確認後，帳號將永久刪除，所有訊息、頭像等資料都將清除。',
+          showCancel: true,
+          confirmText: '確認刪除'
+        });
+        if (!ok) return;
+        try {
+          const uid = currentUser.uid;
+          const profile = users.get(uid);
+          if (profile?.nicknameLower) await set(ref(db, `nicknames/${profile.nicknameLower}`), null);
+          await remove(ref(db, `users/${uid}`));
+          await remove(ref(db, `admins/${uid}`));
+          await remove(ref(db, `bans/${uid}`));
+          try { await deleteObject(storageRef(storage, `avatars/${uid}`)); } catch {}
+          await deleteUser(currentUser);
+          window.location.href = 'login.html';
+        } catch { showModal({ title: '錯誤', content: '刪除失敗，請重新登入後再試' }); }
+      };
+      document.getElementById('profileSave').onclick = async () => {
+        if (appState.pendingAvatarBlob) {
+          try {
+            const uid = currentUser.uid;
+            const avatarRef = storageRef(storage, `avatars/${uid}`);
+            await uploadBytes(avatarRef, appState.pendingAvatarBlob, { contentType: 'image/webp' });
+            const url = await getDownloadURL(avatarRef);
+            await update(ref(db, `users/${uid}/profile`), { avatarUrl: url });
+            appState.pendingAvatarBlob = null;
+            appState.profileDirty = false;
+            showModal({ title: '完成', content: '頭像已更新' });
+          } catch { showModal({ title: '錯誤', content: '上傳失敗' }); }
+        } else {
+          showModal({ title: '提示', content: '沒有需要儲存的變更' });
+        }
+      };
+      document.getElementById('profileClose').onclick = async () => {
+        if (appState.profileDirty) {
+          const ok = await showModal({ title: '確認', content: '有未儲存的變更，確定要關閉嗎？', showCancel: true });
+          if (!ok) return;
+        }
+        appState.pendingAvatarBlob = null;
+        appState.profileDirty = false;
+        elements.modalOverlay.classList.add('hidden');
+        elements.profileModal.classList.add('hidden');
+      };
+    }
+
+    function openCropModal(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let scale = 1;
+          let offsetX = 0, offsetY = 0;
+          const containerSize = 280;
+          const minDim = Math.min(img.width, img.height);
+          const baseScale = containerSize / minDim;
+          scale = baseScale;
+          let imgW = img.width * scale;
+          let imgH = img.height * scale;
+          offsetX = (containerSize - imgW) / 2;
+          offsetY = (containerSize - imgH) / 2;
+
+          elements.cropModal.innerHTML = `
+            <div class="crop-container">
+              <img id="cropImage" src="${e.target.result}" style="width:${imgW}px;height:${imgH}px;left:${offsetX}px;top:${offsetY}px;">
+              <div class="crop-overlay"></div>
+            </div>
+            <div class="crop-controls">
+              <span>縮小</span>
+              <input type="range" id="cropZoom" min="50" max="300" value="100">
+              <span>放大</span>
+            </div>
+            <div class="crop-actions">
+              <button id="cropConfirm">確認</button>
+              <button id="cropCancel" style="background:var(--brand2);">關閉</button>
+            </div>`;
+          elements.cropModal.classList.remove('hidden');
+
+          const cropImg = document.getElementById('cropImage');
+          const zoomInput = document.getElementById('cropZoom');
+          let isDragging = false, startX, startY;
+
+          function updateImg() {
+            cropImg.style.width = imgW + 'px';
+            cropImg.style.height = imgH + 'px';
+            cropImg.style.left = offsetX + 'px';
+            cropImg.style.top = offsetY + 'px';
+          }
+
+          zoomInput.oninput = () => {
+            const zoom = parseInt(zoomInput.value) / 100;
+            const newW = img.width * baseScale * zoom;
+            const newH = img.height * baseScale * zoom;
+            const cx = containerSize / 2;
+            const cy = containerSize / 2;
+            offsetX = cx - (cx - offsetX) * (newW / imgW);
+            offsetY = cy - (cy - offsetY) * (newH / imgH);
+            imgW = newW;
+            imgH = newH;
+            updateImg();
+          };
+
+          const handleDown = (ex, ey) => { isDragging = true; startX = ex - offsetX; startY = ey - offsetY; };
+          const handleMove = (ex, ey) => { if (!isDragging) return; offsetX = ex - startX; offsetY = ey - startY; updateImg(); };
+          const handleUp = () => { isDragging = false; };
+
+          cropImg.onmousedown = (ev) => { ev.preventDefault(); handleDown(ev.clientX, ev.clientY); };
+          window.addEventListener('mousemove', (ev) => handleMove(ev.clientX, ev.clientY));
+          window.addEventListener('mouseup', handleUp);
+          cropImg.ontouchstart = (ev) => { const t = ev.touches[0]; handleDown(t.clientX, t.clientY); };
+          cropImg.ontouchmove = (ev) => { ev.preventDefault(); const t = ev.touches[0]; handleMove(t.clientX, t.clientY); };
+          cropImg.ontouchend = handleUp;
+
+          document.getElementById('cropConfirm').onclick = () => {
+            const canvas = document.createElement('canvas');
+            const size = 240;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const circleX = (containerSize / 2 - offsetX) / (imgW / img.width);
+            const circleY = (containerSize / 2 - offsetY) / (imgH / img.height);
+            const circleR = (size / 2) / (imgW / img.width);
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(img, circleX - circleR, circleY - circleR, circleR * 2, circleR * 2, 0, 0, size, size);
+            canvas.toBlob((blob) => {
+              appState.pendingAvatarBlob = blob;
+              appState.profileDirty = true;
+              const url = URL.createObjectURL(blob);
+              const avatarArea = document.getElementById('profileAvatarArea');
+              if (avatarArea) avatarArea.innerHTML = `<img class="profile-modal-avatar" src="${url}" alt="">`;
+              elements.cropModal.classList.add('hidden');
+            }, 'image/webp', 0.85);
+          };
+
+          document.getElementById('cropCancel').onclick = () => {
+            elements.cropModal.classList.add('hidden');
+          };
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function enterSelectMode(initialKey) {
+      appState.selectMode = true;
+      appState.selectedMessages.clear();
+      appState.selectedMessages.add(initialKey);
+      elements.selectBar.classList.remove('hidden');
+      updateSelectBar();
+      document.querySelectorAll('.chat-message').forEach(el => {
+        const key = el.dataset.msgId;
+        const msg = appState.messages.get(key);
+        if (!msg) return;
+        const canSelect = msg.uid === appState.currentUser.uid || appState.admins.has(appState.currentUser.uid);
+        if (!canSelect) return;
+        el.classList.add('select-mode');
+        const cb = document.createElement('div');
+        cb.className = 'select-checkbox' + (appState.selectedMessages.has(key) ? ' checked' : '');
+        cb.dataset.msgKey = key;
+        cb.onclick = () => toggleSelect(key);
+        el.insertBefore(cb, el.firstChild);
+      });
+    }
+
+    function exitSelectMode() {
+      appState.selectMode = false;
+      appState.selectedMessages.clear();
+      elements.selectBar.classList.add('hidden');
+      document.querySelectorAll('.select-checkbox').forEach(el => el.remove());
+      document.querySelectorAll('.chat-message.select-mode').forEach(el => el.classList.remove('select-mode'));
+    }
+
+    function toggleSelect(key) {
+      if (appState.selectedMessages.has(key)) appState.selectedMessages.delete(key);
+      else appState.selectedMessages.add(key);
+      const cb = document.querySelector(`.select-checkbox[data-msg-key="${key}"]`);
+      if (cb) cb.classList.toggle('checked', appState.selectedMessages.has(key));
+      updateSelectBar();
+      if (appState.selectedMessages.size === 0) exitSelectMode();
+    }
+
+    function updateSelectBar() {
+      elements.selectBar.querySelector('.select-bar-text').textContent = `已選取 ${appState.selectedMessages.size} 條訊息`;
     }
 
     function renderWithMentions(text) {
