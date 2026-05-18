@@ -447,9 +447,12 @@
         hideMentionList();
         document.getElementById('emojiPanel').classList.add('hidden');
       } catch { showModal({ title: '錯誤', content: '訊息傳送失敗。' }); }
+      elements.inputEl.focus();
     }
 
     function setupEventListeners() {
+      elements.sendBtn.addEventListener('mousedown', (e) => e.preventDefault());
+      elements.sendBtn.addEventListener('touchstart', (e) => e.preventDefault());
       elements.sendBtn.onclick = sendMessage;
       elements.inputEl.onkeydown = (e) => {
         if (!elements.mentionList.classList.contains('hidden')) {
