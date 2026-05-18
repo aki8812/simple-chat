@@ -63,7 +63,13 @@
       </div>
       <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
       <div class="input-area">
+        <button id="uploadBtn" type="button" class="upload-btn">
+          <svg viewBox="0 0 24 24">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
+          </svg>
+        </button>
         <div class="input-container">
+          <div id="imagePreview" class="image-preview-container hidden"></div>
           <div id="mentionList" class="mention-list hidden"></div>
           <div id="emojiPanel" class="emoji-panel hidden">
             <div class="emoji-header">
@@ -98,6 +104,15 @@
   <div id="profileModal" class="profile-modal hidden"></div>
   <div id="cropModal" class="crop-modal hidden"></div>
   <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
+  <input type="file" id="imageFileInput" accept="image/*" multiple style="display:none;">
+  <div id="imageViewer" class="viewer-overlay">
+    <div class="viewer-content">
+      <button class="viewer-close">✕</button>
+      <button class="viewer-nav viewer-prev">‹</button>
+      <img src="" alt="">
+      <button class="viewer-nav viewer-next">›</button>
+    </div>
+  </div>
   <script type="module">
     import { auth, db, storage } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload, deleteUser } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
@@ -132,6 +147,10 @@
       sidebarProfile: document.getElementById('sidebarProfile'),
       profileBtnAdmin: document.getElementById('profileBtnAdmin'),
       profileBtnNormal: document.getElementById('profileBtnNormal'),
+      uploadBtn: document.getElementById('uploadBtn'),
+      imageFileInput: document.getElementById('imageFileInput'),
+      imagePreview: document.getElementById('imagePreview'),
+      imageViewer: document.getElementById('imageViewer'),
     };
 
     const appState = {
@@ -152,6 +171,9 @@
       selectedMessages: new Set(),
       profileDirty: false,
       pendingAvatarBlob: null,
+      pendingImages: [],
+      viewerImages: [],
+      viewerIndex: 0,
     };
 
     function saveMentionHistory(nickname) {
@@ -417,6 +439,22 @@
       const authorUser = users.get(msg.uid);
       const authorName = authorUser?.nickname || msg.nickname || '...';
       const bubbleAvatarHtml = authorUser?.avatarUrl ? `<img class="bubble-avatar" src="${authorUser.avatarUrl}" alt="">` : '';
+      
+      let imagesHtml = '';
+      if (msg.images && msg.images.length > 0) {
+        const count = msg.images.length;
+        const gridClass = count === 1 ? 'grid-1' : count === 2 ? 'grid-2' : count === 3 ? 'grid-3' : 'grid-4';
+        imagesHtml = `<div class="bubble-images ${gridClass}">`;
+        msg.images.slice(0, 4).forEach((url, i) => {
+          imagesHtml += `
+            <div class="img-item loading" onclick="event.stopPropagation(); openImageViewer(${JSON.stringify(msg.images).replace(/"/g, '&quot;')}, ${i})">
+              <img src="${url}" alt="" onload="this.parentElement.classList.remove('loading')">
+              ${i === 3 && count > 4 ? `<div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">+${count - 4}</div>` : ''}
+            </div>`;
+        });
+        imagesHtml += '</div>';
+      }
+
       wrap.innerHTML = `
         <div class="bubble">
             <div class="bubble-head">
@@ -425,6 +463,7 @@
                 ${deleteBtnHtml}
             </div>
             <div class="bubble-text">${renderWithMentions(msg.text)}</div>
+            ${imagesHtml}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
       return wrap;
@@ -432,21 +471,35 @@
 
     async function sendMessage() {
       const text = elements.inputEl.innerText.trim();
-      if (!text) return;
+      if (!text && appState.pendingImages.length === 0) return;
       const myProfile = appState.users.get(appState.currentUser.uid);
+      elements.inputEl.contentEditable = false;
+      elements.sendBtn.disabled = true;
       try {
+        const imageUrls = await uploadImages();
         const mentionRegex = /@([\p{L}\p{N}_-]{3,24})/gu;
         let match;
-        while ((match = mentionRegex.exec(text)) !== null) {
+        const tempText = text || '';
+        while ((match = mentionRegex.exec(tempText)) !== null) {
           saveMentionHistory(match[1]);
         }
         await push(ref(db, 'messages'), {
-          uid: appState.currentUser.uid, text, time: Date.now(), nickname: myProfile.nickname,
+          uid: appState.currentUser.uid,
+          text: tempText,
+          time: Date.now(),
+          nickname: myProfile.nickname,
+          images: imageUrls
         });
         elements.inputEl.innerHTML = '';
         hideMentionList();
         document.getElementById('emojiPanel').classList.add('hidden');
-      } catch { showModal({ title: '錯誤', content: '訊息傳送失敗。' }); }
+      } catch { 
+        showModal({ title: '錯誤', content: '訊息傳送失敗。' }); 
+      } finally {
+        elements.inputEl.contentEditable = true;
+        elements.sendBtn.disabled = false;
+        elements.inputEl.focus();
+      }
     }
 
     function setupEventListeners() {
@@ -504,6 +557,19 @@
       elements.userListContainer.addEventListener('click', e => {
         const target = e.target.closest('.userrow');
         if (target) openUserCard(target.dataset.uid);
+      });
+
+      elements.uploadBtn.onclick = () => elements.imageFileInput.click();
+      elements.imageFileInput.onchange = handleImageSelect;
+
+      elements.imageViewer.querySelector('.viewer-close').onclick = () => elements.imageViewer.classList.remove('active');
+      elements.imageViewer.querySelector('.viewer-prev').onclick = () => navigateViewer(-1);
+      elements.imageViewer.querySelector('.viewer-next').onclick = () => navigateViewer(1);
+      window.addEventListener('keydown', (e) => {
+        if (!elements.imageViewer.classList.contains('active')) return;
+        if (e.key === 'Escape') elements.imageViewer.classList.remove('active');
+        if (e.key === 'ArrowLeft') navigateViewer(-1);
+        if (e.key === 'ArrowRight') navigateViewer(1);
       });
 
       elements.selectDeleteBtn.onclick = async () => {
@@ -1054,6 +1120,84 @@
       });
     }
     function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
+
+    function handleImageSelect(e) {
+      const files = Array.from(e.target.files);
+      if (appState.pendingImages.length + files.length > 10) {
+        return showModal({ title: '提示', content: '最多只能上傳 10 張圖片' });
+      }
+      files.forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+        const url = URL.createObjectURL(file);
+        appState.pendingImages.push({ file, url });
+      });
+      renderImagePreviews();
+      elements.imageFileInput.value = '';
+    }
+
+    function renderImagePreviews() {
+      if (appState.pendingImages.length === 0) {
+        elements.imagePreview.classList.add('hidden');
+        elements.imagePreview.innerHTML = '';
+        return;
+      }
+      elements.imagePreview.classList.remove('hidden');
+      elements.imagePreview.innerHTML = appState.pendingImages.map((img, i) => `
+        <div class="preview-item">
+          <img src="${img.url}" alt="">
+          <button class="remove-btn" data-index="${i}">✕</button>
+        </div>
+      `).join('');
+      elements.imagePreview.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.onclick = (e) => {
+          const idx = parseInt(e.target.dataset.index);
+          removePendingImage(idx);
+        };
+      });
+    }
+
+    function removePendingImage(idx) {
+      const img = appState.pendingImages[idx];
+      if (img) URL.revokeObjectURL(img.url);
+      appState.pendingImages.splice(idx, 1);
+      renderImagePreviews();
+    }
+
+    async function uploadImages() {
+      if (appState.pendingImages.length === 0) return [];
+      const uploadPromises = appState.pendingImages.map(async (item) => {
+        const name = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const imageRef = storageRef(storage, `chat/${appState.currentUser.uid}/${name}`);
+        await uploadBytes(imageRef, item.file);
+        return getDownloadURL(imageRef);
+      });
+      const urls = await Promise.all(uploadPromises);
+      appState.pendingImages.forEach(img => URL.revokeObjectURL(img.url));
+      appState.pendingImages = [];
+      renderImagePreviews();
+      return urls;
+    }
+
+    function openImageViewer(images, index) {
+      appState.viewerImages = images;
+      appState.viewerIndex = index;
+      renderViewer();
+      elements.imageViewer.classList.add('active');
+    }
+
+    function renderViewer() {
+      const img = elements.imageViewer.querySelector('img');
+      img.src = appState.viewerImages[appState.viewerIndex];
+      const prev = elements.imageViewer.querySelector('.viewer-prev');
+      const next = elements.imageViewer.querySelector('.viewer-next');
+      prev.style.display = appState.viewerImages.length > 1 ? 'flex' : 'none';
+      next.style.display = appState.viewerImages.length > 1 ? 'flex' : 'none';
+    }
+
+    function navigateViewer(dir) {
+      appState.viewerIndex = (appState.viewerIndex + dir + appState.viewerImages.length) % appState.viewerImages.length;
+      renderViewer();
+    }
   </script>
   <script>
     if ('serviceWorker' in navigator) {
