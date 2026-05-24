@@ -459,6 +459,13 @@
       appState.isLoadingMore = false;
     }
 
+    window.gifLoaded = function(img) {
+      const box = elements.messagesBox;
+      if (box.scrollHeight - box.scrollTop - box.clientHeight < img.height + 250) {
+         box.scrollTop = box.scrollHeight;
+      }
+    };
+
     function createMessageElement(key, msg) {
       const { currentUser, admins, users } = appState;
       const isSelf = currentUser.uid === msg.uid;
@@ -479,7 +486,7 @@
                 ${deleteBtnHtml}
             </div>
             ${msg.type === 'gif' 
-              ? `<img class="chat-gif" src="${msg.url}" alt="GIF">`
+              ? `<img class="chat-gif" src="${msg.url}" alt="GIF" onload="window.gifLoaded && window.gifLoaded(this)">`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
@@ -1519,17 +1526,7 @@
         let endpoint = '';
         
         if (!query) {
-          if (!append) {
-            const saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
-            if (saved.length > 0) {
-              urls = saved;
-              gifNextCursor = '';
-            } else {
-              endpoint = `https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20&pos=${gifNextCursor}`;
-            }
-          } else {
-            endpoint = `https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20&pos=${gifNextCursor}`;
-          }
+          endpoint = `https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20&pos=${gifNextCursor}`;
         } else {
           endpoint = `https://g.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=LIVDSRZULELA&limit=20&locale=zh_TW&pos=${gifNextCursor}`;
         }
@@ -1539,6 +1536,11 @@
           const data = await res.json();
           urls = data.results.map(r => r.media[0].nanogif.url);
           gifNextCursor = data.next || '';
+        }
+
+        if (!query && !append) {
+          const saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
+          urls = Array.from(new Set([...saved, ...urls]));
         }
         
         if (!append && urls.length === 0) {

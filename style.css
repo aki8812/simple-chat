@@ -1278,12 +1278,17 @@ button.danger:hover {
 }
 
 .chat-gif {
-  max-width: 200px;
-  max-height: 200px;
+  max-width: 380px;
+  width: 100%;
   border-radius: 8px;
   display: block;
   margin-top: 4px;
   object-fit: cover;
+}
+
+.chat-message.self .chat-gif {
+  margin-left: auto;
+  margin-right: 0;
 }
 
 @media (max-width: 768px) {
