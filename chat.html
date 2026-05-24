@@ -1552,7 +1552,7 @@
       }
 
       try {
-        let urls = [];
+        let items = [];
         let endpoint = '';
         
         if (!query) {
@@ -1564,31 +1564,41 @@
         if (endpoint) {
           const res = await fetch(endpoint);
           const data = await res.json();
-          urls = data.results.map(r => r.media[0].nanogif.url);
+          items = data.results.map(r => ({ preview: r.media[0].tinygif.url, full: r.media[0].mediumgif.url }));
           gifNextCursor = data.next || '';
         }
 
         if (!query && !append) {
           const saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
-          urls = Array.from(new Set([...saved, ...urls]));
+          const savedItems = saved.map(s => typeof s === 'string' ? { preview: s, full: s } : s);
+          const allPreviews = new Set();
+          const merged = [];
+          savedItems.concat(items).forEach(it => {
+            if (!allPreviews.has(it.preview)) {
+              allPreviews.add(it.preview);
+              merged.push(it);
+            }
+          });
+          items = merged;
         }
         
-        if (!append && urls.length === 0) {
+        if (!append && items.length === 0) {
           gifGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:10px;color:var(--muted);">找不到 GIF</div>';
           isFetchingGifs = false;
           return;
         }
 
         if (!append) gifGrid.innerHTML = '';
-        urls.forEach(url => {
+        items.forEach(item => {
           const img = document.createElement('img');
           img.className = 'gif-item';
-          img.src = url;
+          img.src = item.preview;
           img.loading = 'lazy';
           img.onclick = () => {
-            window.sendGifMessage(url);
+            window.sendGifMessage(item.full);
             let saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
-            saved = [url, ...saved.filter(u => u !== url)].slice(0, 20);
+            saved = saved.map(s => typeof s === 'string' ? { preview: s, full: s } : s);
+            saved = [item, ...saved.filter(s => s.preview !== item.preview)].slice(0, 20);
             localStorage.setItem('frequentGifs', JSON.stringify(saved));
           };
           gifGrid.appendChild(img);
