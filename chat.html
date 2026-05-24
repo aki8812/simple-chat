@@ -523,6 +523,11 @@
         }
       });
 
+      elements.inputEl.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = (e.originalEvent || e).clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, text);
+      });
       elements.inputEl.oninput = handleInput;
       elements.logoutBtn.onclick = async () => {
         const ok = await showModal({ title: '確認', content: '確定要登出嗎？', showCancel: true });
@@ -630,25 +635,29 @@
         }
         const link = e.target.closest('.chat-link');
         if (link) {
+          const skipAsk = localStorage.getItem('skipLinkAsk') === 'true';
+          if (skipAsk) return; // Allow the default <a> tag behavior
+
           e.preventDefault();
           const url = link.dataset.url;
-          const skipAsk = localStorage.getItem('skipLinkAsk') === 'true';
-          if (skipAsk) {
-            window.open(url, '_blank');
-          } else {
-            const content = `
-              <div style="margin-bottom:12px;">你即將前往：<br><a href="${url}" target="_blank" style="color:var(--brand);word-break:break-all;">${url}</a></div>
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer;">
-                <input type="checkbox" id="skipLinkAskCheck">
-                <span>不再詢問，之後直接前往</span>
-              </label>
-            `;
-            const ok = await showModal({ title: '⚠️ 前往外部連結', content, showCancel: true, confirmText: '前往' });
-            if (ok) {
-              const cb = document.getElementById('skipLinkAskCheck');
-              if (cb && cb.checked) localStorage.setItem('skipLinkAsk', 'true');
-              window.open(url, '_blank');
-            }
+          const content = `
+            <div style="margin-bottom:12px;">你即將前往：<br><a href="${url}" target="_blank" style="color:var(--brand);word-break:break-all;">${url}</a></div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer;">
+              <input type="checkbox" id="skipLinkAskCheck">
+              <span>不再詢問，之後直接前往</span>
+            </label>
+          `;
+          const ok = await showModal({ title: '⚠️ 前往外部連結', content, showCancel: true, confirmText: '前往' });
+          if (ok) {
+            const cb = document.getElementById('skipLinkAskCheck');
+            if (cb && cb.checked) localStorage.setItem('skipLinkAsk', 'true');
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
           }
         }
       });
@@ -944,7 +953,7 @@
         </div>`;
       elements.modalOverlay.classList.remove('hidden');
       elements.profileModal.classList.remove('hidden');
-      const currentMode = localStorage.getItem('userStatusMode') || 'online';
+      const currentMode = myProfile?.statusMode || localStorage.getItem('userStatusMode') || 'online';
       let pendingStatus = currentMode;
       const picker = document.getElementById('statusPicker');
       const options = picker.querySelectorAll('.status-option');
@@ -1242,7 +1251,7 @@
         return uid ? `${sp}<span class="mention" data-uid="${uid}">@${name}</span>` : m;
       });
       rendered = rendered.replace(/(https?:\/\/[^\s<]+)/g, (url) => {
-        return `<a href="#" class="chat-link" data-url="${url}">${url}</a>`;
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link" data-url="${url}">${url}</a>`;
       });
       return rendered;
     }
@@ -1359,21 +1368,56 @@
     const emojiPanel = document.getElementById('emojiPanel');
     const emojiBtn = document.getElementById('emojiBtn');
     const emojiCloseBtn = document.getElementById('emojiClose');
+    let savedSelectionRange = null;
+    document.addEventListener('selectionchange', () => {
+      const selection = window.getSelection();
+      const input = document.getElementById('messageInput');
+      if (selection.rangeCount > 0 && selection.focusNode && input && input.contains(selection.focusNode)) {
+        savedSelectionRange = selection.getRangeAt(0);
+      }
+    });
+
     EMOJIS.forEach(em => {
       const span = document.createElement('span');
       span.className = 'emoji-item';
       span.textContent = em;
-      span.onclick = () => {
+      
+      const insertEm = (e) => {
+        if (e) e.preventDefault();
         const input = document.getElementById('messageInput');
         input.focus();
+        if (savedSelectionRange) {
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(savedSelectionRange);
+        } else if (input.childNodes.length > 0) {
+          const range = document.createRange();
+          range.selectNodeContents(input);
+          range.collapse(false);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
         document.execCommand('insertText', false, em);
       };
+
+      span.addEventListener('mousedown', e => e.preventDefault());
+      span.addEventListener('touchstart', (e) => { e.preventDefault(); insertEm(); }, { passive: false });
+      span.onclick = insertEm;
       emojiGrid.appendChild(span);
     });
     function hideEmojiPanel() { emojiPanel.classList.add('hidden'); }
     emojiBtn.onclick = () => {
       emojiPanel.classList.toggle('hidden');
-      if (!emojiPanel.classList.contains('hidden')) document.getElementById('messageInput').focus();
+      if (!emojiPanel.classList.contains('hidden')) {
+        const input = document.getElementById('messageInput');
+        input.focus();
+        if (savedSelectionRange) {
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(savedSelectionRange);
+        }
+      }
     };
     emojiCloseBtn.onclick = hideEmojiPanel;
     const appEl = document.querySelector('.app');

@@ -172,10 +172,14 @@
           let statusDotHtml = '';
           if (uid) {
             const s = appState.statuses.get(uid);
-            if (s && s.state === 'online') {
-              statusDotHtml = `<span class="status-dot ${s.mode === 'dnd' ? 'dnd' : 'online'}"></span>`;
-            } else if (s && s.state === 'offline') {
-              statusDotHtml = `<span class="status-dot invisible"></span>`;
+            const myProfile = appState.users.get(uid);
+            const currentMode = myProfile?.statusMode || s?.mode || 'online';
+            const isOnline = (uid === appState.currentUser?.uid)
+              ? (currentMode !== 'invisible')
+              : (s?.state === 'online');
+
+            if (isOnline) {
+              statusDotHtml = `<span class="status-dot ${currentMode === 'dnd' ? 'dnd' : 'online'}"></span>`;
             } else {
               statusDotHtml = `<span class="status-dot invisible"></span>`;
             }
