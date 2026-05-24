@@ -1278,11 +1278,11 @@ button.danger:hover {
 }
 
 .chat-gif {
-  max-width: 380px;
-  width: 100%;
+  width: 400px;
+  max-width: 100%;
   border-radius: 8px;
   display: block;
-  margin-top: 4px;
+  margin-top: 8px;
   object-fit: cover;
 }
 

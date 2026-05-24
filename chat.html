@@ -461,8 +461,10 @@
 
     window.gifLoaded = function(img) {
       const box = elements.messagesBox;
-      if (box.scrollHeight - box.scrollTop - box.clientHeight < img.height + 250) {
-         box.scrollTop = box.scrollHeight;
+      if (box.scrollHeight - box.scrollTop - box.clientHeight < 800) {
+         setTimeout(() => {
+           box.scrollTop = box.scrollHeight;
+         }, 100);
       }
     };
 
