@@ -434,18 +434,52 @@ body {
   border-radius: 4px;
 }
 
+.profile-modal-body-wrapper {
+  position: relative;
+  margin-bottom: 16px;
+}
+
 .profile-modal-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
   font-size: 14px;
   color: var(--muted);
-  margin-bottom: 16px;
   max-height: 220px;
   overflow-y: auto;
   padding-right: 6px;
   scrollbar-width: thin;
   scrollbar-color: #202225 transparent;
+}
+
+.scroll-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: calc(100% - 10px);
+  height: 40px;
+  background: linear-gradient(to top, var(--bg2) 10%, transparent 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s;
+  color: var(--muted);
+}
+
+.scroll-indicator svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  animation: bounceDown 1.5s infinite;
+  opacity: 0.6;
+}
+
+@keyframes bounceDown {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
 }
 
 .profile-modal-footer {

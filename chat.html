@@ -896,50 +896,55 @@
             </div>
           </div>
         </div>
-        <div class="profile-modal-body">
-          <div>註冊時間：${fmt(myProfile?.registeredAt)}</div>
-          ${banInfo}
-          <div class="status-select-container">
-            <span class="status-select-label">線上狀態</span>
-            <div class="status-picker" id="statusPicker">
-              <div class="status-option" data-value="online">
-                <span class="status-option-dot online"></span>
-                <div class="status-option-info">
-                  <span class="status-option-name">線上</span>
+        <div class="profile-modal-body-wrapper" style="position: relative;">
+          <div class="profile-modal-body" id="profileModalBody">
+            <div>註冊時間：${fmt(myProfile?.registeredAt)}</div>
+            ${banInfo}
+            <div class="status-select-container">
+              <span class="status-select-label">線上狀態</span>
+              <div class="status-picker" id="statusPicker">
+                <div class="status-option" data-value="online">
+                  <span class="status-option-dot online"></span>
+                  <div class="status-option-info">
+                    <span class="status-option-name">線上</span>
+                  </div>
+                </div>
+                <div class="status-option" data-value="dnd">
+                  <span class="status-option-dot dnd"></span>
+                  <div class="status-option-info">
+                    <span class="status-option-name">請勿打擾</span>
+                    <span class="status-option-desc">你將不會收到通知</span>
+                  </div>
+                </div>
+                <div class="status-option" data-value="invisible">
+                  <span class="status-option-dot invisible"></span>
+                  <div class="status-option-info">
+                    <span class="status-option-name">隱身</span>
+                    <span class="status-option-desc">你將顯示為離線</span>
+                  </div>
                 </div>
               </div>
-              <div class="status-option" data-value="dnd">
-                <span class="status-option-dot dnd"></span>
-                <div class="status-option-info">
-                  <span class="status-option-name">請勿打擾</span>
-                  <span class="status-option-desc">你將不會收到通知</span>
-                </div>
+            </div>
+            <div class="status-select-container" style="margin-top:16px;">
+              <span class="status-select-label">系統通知</span>
+              <div class="settings-list">
+                <label class="setting-item">
+                  <span>網頁推播通知</span>
+                  <input type="checkbox" id="settingPushNotif" class="toggle-switch">
+                </label>
+                <label class="setting-item">
+                  <span>收到訊息音效</span>
+                  <input type="checkbox" id="settingSoundNotif" class="toggle-switch">
+                </label>
               </div>
-              <div class="status-option" data-value="invisible">
-                <span class="status-option-dot invisible"></span>
-                <div class="status-option-info">
-                  <span class="status-option-name">隱身</span>
-                  <span class="status-option-desc">你將顯示為離線</span>
-                </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);padding:10px 12px;border-radius:6px;margin-top:8px;">
+                <span id="modalNotificationStatus" style="font-size:13px;color:var(--text);"></span>
+                <button id="modalNotificationBtn" style="padding:6px 12px;font-size:12px;border-radius:4px;display:none;"></button>
               </div>
             </div>
           </div>
-          <div class="status-select-container" style="margin-top:16px;">
-            <span class="status-select-label">系統通知</span>
-            <div class="settings-list">
-              <label class="setting-item">
-                <span>網頁推播通知</span>
-                <input type="checkbox" id="settingPushNotif" class="toggle-switch">
-              </label>
-              <label class="setting-item">
-                <span>收到訊息音效</span>
-                <input type="checkbox" id="settingSoundNotif" class="toggle-switch">
-              </label>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);padding:10px 12px;border-radius:6px;margin-top:8px;">
-              <span id="modalNotificationStatus" style="font-size:13px;color:var(--text);"></span>
-              <button id="modalNotificationBtn" style="padding:6px 12px;font-size:12px;border-radius:4px;display:none;"></button>
-            </div>
+          <div class="scroll-indicator" id="profileScrollIndicator">
+            <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
           </div>
         </div>
         <div class="profile-modal-footer">
@@ -953,6 +958,23 @@
         </div>`;
       elements.modalOverlay.classList.remove('hidden');
       elements.profileModal.classList.remove('hidden');
+
+      const bodyEl = document.getElementById('profileModalBody');
+      const indicator = document.getElementById('profileScrollIndicator');
+      const checkScroll = () => {
+        if (!bodyEl || !indicator) return;
+        if (bodyEl.scrollHeight - bodyEl.scrollTop <= bodyEl.clientHeight + 5) {
+          indicator.style.opacity = '0';
+          indicator.style.pointerEvents = 'none';
+        } else {
+          indicator.style.opacity = '1';
+        }
+      };
+      if (bodyEl && indicator) {
+        bodyEl.addEventListener('scroll', checkScroll);
+        setTimeout(checkScroll, 50);
+      }
+
       const currentMode = myProfile?.statusMode || localStorage.getItem('userStatusMode') || 'online';
       let pendingStatus = currentMode;
       const picker = document.getElementById('statusPicker');
