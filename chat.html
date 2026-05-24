@@ -490,7 +490,7 @@
       const myProfile = appState.users.get(appState.currentUser.uid);
       try {
         await push(ref(db, 'messages'), {
-          uid: appState.currentUser.uid, type: 'gif', url, time: Date.now(), nickname: myProfile.nickname,
+          uid: appState.currentUser.uid, type: 'gif', url, text: '[GIF 貼圖]', time: Date.now(), nickname: myProfile.nickname,
         });
         hideEmojiPanel();
       } catch (e) {
