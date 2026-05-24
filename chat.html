@@ -286,7 +286,7 @@
         appState.latestMessageTime = msg.time;
         const el = createMessageElement(snap.key, msg);
         elements.messagesBox.appendChild(el);
-        elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
+        scrollToBottomAfterImages(elements.messagesBox);
         triggerNotification(msg);
       });
 
@@ -382,12 +382,32 @@
       elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
     }
 
+    function scrollToBottomAfterImages(container) {
+      const images = container.querySelectorAll('img');
+      const unloaded = Array.from(images).filter(img => !img.complete);
+      if (unloaded.length === 0) {
+        container.scrollTop = container.scrollHeight;
+        return;
+      }
+      let loaded = 0;
+      const check = () => {
+        loaded++;
+        container.scrollTop = container.scrollHeight;
+        if (loaded >= unloaded.length) return;
+      };
+      unloaded.forEach(img => {
+        img.addEventListener('load', check, { once: true });
+        img.addEventListener('error', check, { once: true });
+      });
+      container.scrollTop = container.scrollHeight;
+    }
+
     function renderAllMessages(isInitial = false) {
       const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
       elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
 
       if (isInitial) {
-        elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
+        scrollToBottomAfterImages(elements.messagesBox);
         setTimeout(() => {
           appState.isInitialising = false;
         }, 1000);
@@ -453,20 +473,28 @@
         elements.messagesBox.style.scrollBehavior = 'auto';
         elements.messagesBox.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
         elements.messagesBox.style.scrollBehavior = '';
+
+        if (appState.selectMode) {
+          elements.messagesBox.querySelectorAll('.chat-message').forEach(el => {
+            if (el.classList.contains('select-mode')) return;
+            const key = el.dataset.msgId;
+            const msg = appState.messages.get(key);
+            if (!msg) return;
+            const canSelect = msg.uid === appState.currentUser.uid || appState.admins.has(appState.currentUser.uid);
+            if (!canSelect) return;
+            el.classList.add('select-mode');
+            const cb = document.createElement('div');
+            cb.className = 'select-checkbox' + (appState.selectedMessages.has(key) ? ' checked' : '');
+            cb.dataset.msgKey = key;
+            el.insertBefore(cb, el.firstChild);
+          });
+        }
       } else {
         appState.hasMoreOldMessages = false;
       }
       appState.isLoadingMore = false;
     }
 
-    window.gifLoaded = function(img) {
-      const box = elements.messagesBox;
-      if (box.scrollHeight - box.scrollTop - box.clientHeight < 800) {
-         setTimeout(() => {
-           box.scrollTop = box.scrollHeight;
-         }, 100);
-      }
-    };
 
     function createMessageElement(key, msg) {
       const { currentUser, admins, users } = appState;
@@ -488,7 +516,7 @@
                 ${deleteBtnHtml}
             </div>
             ${msg.type === 'gif' 
-              ? `<img class="chat-gif" src="${msg.url}" alt="GIF" onload="window.gifLoaded && window.gifLoaded(this)">`
+              ? `<img class="chat-gif" src="${msg.url}" alt="GIF">`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
