@@ -43,6 +43,7 @@
             users: new Map(),
             admins: new Set(),
             bans: new Set(),
+            statuses: new Map(),
         };
 
         function showModal({ title, content, confirmText = '確定', cancelText = '取消', showCancel = false }) {
@@ -96,6 +97,13 @@
         });
 
         function initializeListeners() {
+            onValue(ref(db, 'status'), (snap) => {
+                appState.statuses.clear();
+                snap.forEach(s => {
+                    appState.statuses.set(s.key, s.val());
+                });
+                updateAndRender();
+            });
             onValue(ref(db, 'users'), (snap) => {
                 appState.users.clear();
                 snap.forEach(u => {
@@ -160,8 +168,22 @@
 
         const DEFAULT_AVATAR_SVG = '<svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>';
         function adminAvatarHtml(user) {
-          if (user && user.avatarUrl) return `<img class="admin-avatar" src="${user.avatarUrl}" alt="">`;
-          return `<div class="admin-avatar-default">${DEFAULT_AVATAR_SVG}</div>`;
+          const uid = user?.uid;
+          let statusDotHtml = '';
+          if (uid) {
+            const s = appState.statuses.get(uid);
+            if (s && s.state === 'online') {
+              statusDotHtml = `<span class="status-dot ${s.mode === 'dnd' ? 'dnd' : 'online'}"></span>`;
+            } else if (s && s.state === 'offline') {
+              statusDotHtml = `<span class="status-dot invisible"></span>`;
+            } else {
+              statusDotHtml = `<span class="status-dot invisible"></span>`;
+            }
+          }
+          const imgHtml = (user && user.avatarUrl)
+            ? `<img class="admin-avatar" src="${user.avatarUrl}" alt="">`
+            : `<div class="admin-avatar-default">${DEFAULT_AVATAR_SVG}</div>`;
+          return `<div class="avatar-container">${imgHtml}${statusDotHtml}</div>`;
         }
 
         function createSectionHtml(title, userArray) {

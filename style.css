@@ -695,6 +695,7 @@ button.danger:hover {
 
 .input-area {
   display: flex;
+  align-items: flex-end;
   gap: 6px;
   padding: 10px;
   border-top: 1px solid #1f2225;
@@ -893,7 +894,7 @@ button.danger:hover {
 
 #sendBtn {
   width: 44px;
-  height: auto;
+  height: 40px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -901,10 +902,6 @@ button.danger:hover {
   border-radius: 6px;
   background: var(--brand);
   transition: all 0.2s;
-}
-
-#sendBtn:hover {
-  background: #4752c4;
 }
 
 #sendBtn svg {
@@ -1013,26 +1010,30 @@ button.danger:hover {
 
 
 .sidebar-content::-webkit-scrollbar,
-.chat-box::-webkit-scrollbar {
+.chat-box::-webkit-scrollbar,
+#messageInput::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 .sidebar-content:hover::-webkit-scrollbar,
-.chat-box:hover::-webkit-scrollbar {
+.chat-box:hover::-webkit-scrollbar,
+#messageInput:hover::-webkit-scrollbar {
   width: 12px;
   height: 12px;
 }
 
 .sidebar-content::-webkit-scrollbar-track,
-.chat-box::-webkit-scrollbar-track {
+.chat-box::-webkit-scrollbar-track,
+#messageInput::-webkit-scrollbar-track {
   background: #1c1f22;
   border-radius: 10px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04);
 }
 
 .sidebar-content::-webkit-scrollbar-thumb,
-.chat-box::-webkit-scrollbar-thumb {
+.chat-box::-webkit-scrollbar-thumb,
+#messageInput::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #3b4050, #2f3344);
   border-radius: 10px;
   border: 2px solid transparent;
@@ -1040,28 +1041,33 @@ button.danger:hover {
 }
 
 .sidebar-content:hover::-webkit-scrollbar-thumb,
-.chat-box:hover::-webkit-scrollbar-thumb {
+.chat-box:hover::-webkit-scrollbar-thumb,
+#messageInput:hover::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #596080, #3a3f5a);
 }
 
 .sidebar-content::-webkit-scrollbar-thumb:active,
-.chat-box::-webkit-scrollbar-thumb:active {
+.chat-box::-webkit-scrollbar-thumb:active,
+#messageInput::-webkit-scrollbar-thumb:active {
   background: linear-gradient(180deg, #6b73a0, #4a5180);
 }
 
 .sidebar-content::-webkit-scrollbar-corner,
-.chat-box::-webkit-scrollbar-corner {
+.chat-box::-webkit-scrollbar-corner,
+#messageInput::-webkit-scrollbar-corner {
   background: #1c1f22;
 }
 
 .sidebar-content,
-.chat-box {
+.chat-box,
+#messageInput {
   scrollbar-width: thin;
   scrollbar-color: #3b4050 #1c1f22;
 }
 
 .sidebar-content:hover,
-.chat-box:hover {
+.chat-box:hover,
+#messageInput:hover {
   scrollbar-color: #596080 #1c1f22;
 }
 
@@ -1077,7 +1083,7 @@ button.danger:hover {
 
 .emoji-btn {
   width: 36px;
-  height: auto;
+  height: 40px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -1087,11 +1093,6 @@ button.danger:hover {
   color: var(--muted);
   transition: all 0.2s;
   flex-shrink: 0;
-}
-
-.emoji-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
 }
 
 .emoji-btn svg {
@@ -1217,5 +1218,139 @@ button.danger:hover {
 
   .emoji-panel {
     width: 240px;
+  }
+}
+
+.link-text {
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.link-text:hover {
+  text-decoration: underline;
+}
+
+.link-confirm-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.link-confirm-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.avatar-container {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg2);
+  box-sizing: border-box;
+}
+
+.status-dot.online {
+  background-color: #43b581;
+}
+
+.status-dot.dnd {
+  background-color: #f04747;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-dot.dnd::after {
+  content: "";
+  display: block;
+  width: 4px;
+  height: 1.5px;
+  background-color: var(--bg2);
+}
+
+.status-dot.invisible {
+  background-color: var(--bg2);
+  border: 2px solid #747f8d;
+}
+
+.bubble-head .status-dot {
+  width: 8px;
+  height: 8px;
+  border-width: 1.5px;
+  bottom: -1px;
+  right: -1px;
+}
+
+.bubble-head .status-dot.dnd::after {
+  width: 3px;
+  height: 1px;
+}
+
+.profile-modal-avatar-container .status-dot,
+.profile-modal-avatar-default-container .status-dot {
+  width: 18px;
+  height: 18px;
+  border-width: 3px;
+  bottom: 2px;
+  right: 2px;
+}
+
+.profile-modal-avatar-container .status-dot.dnd::after,
+.profile-modal-avatar-default-container .status-dot.dnd::after {
+  width: 6px;
+  height: 2px;
+}
+
+.status-select-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.status-select-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--muted);
+}
+
+.status-select {
+  background: #1e2124;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 8px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.status-select:focus {
+  border-color: var(--brand);
+}
+
+@media (hover: hover) {
+  #sendBtn:hover {
+    background: #4752c4;
+  }
+  .emoji-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
   }
 }

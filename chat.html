@@ -101,7 +101,7 @@
   <script type="module">
     import { auth, db, storage } from './firebase.js';
     import { onAuthStateChanged, signOut, sendEmailVerification, reload, deleteUser } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, push, onChildAdded, onChildRemoved, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt, endBefore } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref, push, onChildAdded, onChildRemoved, query, orderByChild, limitToLast, get, onValue, remove, update, runTransaction, set, startAt, endBefore, onDisconnect, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
     import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js';
 
     const elements = {
@@ -152,6 +152,7 @@
       selectedMessages: new Set(),
       profileDirty: false,
       pendingAvatarBlob: null,
+      statuses: new Map(),
     };
 
     function saveMentionHistory(nickname) {
@@ -178,6 +179,10 @@
         const confirmBtn = elements.customModal.querySelector('.confirm');
         const cancelBtn = elements.customModal.querySelector('.cancel');
         confirmBtn.onclick = () => {
+          const skipCheckbox = elements.customModal.querySelector('#linkConfirmSkip');
+          if (skipCheckbox && skipCheckbox.checked) {
+            localStorage.setItem('linkConfirmSkip', 'true');
+          }
           elements.modalOverlay.classList.add('hidden');
           elements.customModal.classList.add('hidden');
           resolve(true);
@@ -218,6 +223,10 @@
         updateAndRenderUI(true);
         attachRealtimeListeners();
         setupEventListeners();
+        setupPresence(appState.currentUser.uid);
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
 
       } catch (error) {
         showModal({ title: '錯誤', content: '無法載入聊天室資料，請稍後重試。' });
@@ -246,6 +255,14 @@
         updateAndRenderUI();
       });
 
+      onValue(ref(db, 'status'), (snap) => {
+        appState.statuses.clear();
+        snap.forEach(s => {
+          appState.statuses.set(s.key, s.val());
+        });
+        updateAndRenderUI();
+      });
+
       const messagesRef = ref(db, 'messages');
       const newMessagesQuery = query(messagesRef, orderByChild('time'), startAt(appState.latestMessageTime));
       onChildAdded(newMessagesQuery, (snap) => {
@@ -256,6 +273,7 @@
         const el = createMessageElement(snap.key, msg);
         elements.messagesBox.appendChild(el);
         elements.messagesBox.scrollTop = elements.messagesBox.scrollHeight;
+        triggerNotification(msg);
       });
 
       onChildRemoved(messagesRef, (snap) => {
@@ -279,8 +297,22 @@
 
     function avatarHtml(user, className = 'avatar', defaultClass = 'avatar-default', withOverlay = false) {
       const overlay = withOverlay ? AVATAR_OVERLAY_HTML : '';
-      if (user && user.avatarUrl) return `<div style="position:relative;display:inline-block;"><img class="${className}" src="${user.avatarUrl}" alt="">${overlay}</div>`;
-      return `<div class="${defaultClass}">${DEFAULT_AVATAR_SVG}${overlay}</div>`;
+      const uid = user?.uid;
+      let statusDotHtml = '';
+      if (uid) {
+        const s = appState.statuses.get(uid);
+        if (s && s.state === 'online') {
+          statusDotHtml = `<span class="status-dot ${s.mode === 'dnd' ? 'dnd' : 'online'}"></span>`;
+        } else if (s && s.state === 'offline') {
+          statusDotHtml = `<span class="status-dot invisible"></span>`;
+        } else {
+          statusDotHtml = `<span class="status-dot invisible"></span>`;
+        }
+      }
+      const imgHtml = (user && user.avatarUrl)
+        ? `<img class="${className}" src="${user.avatarUrl}" alt="">`
+        : `<div class="${defaultClass}">${DEFAULT_AVATAR_SVG}</div>`;
+      return `<div class="avatar-container">${imgHtml}${overlay}${statusDotHtml}</div>`;
     }
 
     function renderControls() {
@@ -414,9 +446,9 @@
       wrap.className = `chat-message ${isSelf ? 'self' : 'other'}`;
       wrap.dataset.msgId = key;
       const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
-      const authorUser = users.get(msg.uid);
+      const authorUser = users.get(msg.uid) || { uid: msg.uid, nickname: msg.nickname };
       const authorName = authorUser?.nickname || msg.nickname || '...';
-      const bubbleAvatarHtml = authorUser?.avatarUrl ? `<img class="bubble-avatar" src="${authorUser.avatarUrl}" alt="">` : '';
+      const bubbleAvatarHtml = avatarHtml(authorUser, 'bubble-avatar', 'bubble-avatar-default');
       wrap.innerHTML = `
         <div class="bubble">
             <div class="bubble-head">
@@ -451,9 +483,17 @@
     }
 
     function setupEventListeners() {
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
       elements.sendBtn.addEventListener('mousedown', (e) => e.preventDefault());
       elements.sendBtn.addEventListener('touchstart', (e) => e.preventDefault());
-      elements.sendBtn.onclick = sendMessage;
+      elements.sendBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        sendMessage();
+      });
+      elements.sendBtn.onclick = (e) => {
+        if (isTouchDevice) return;
+        sendMessage();
+      };
       elements.inputEl.onkeydown = (e) => {
         if (!elements.mentionList.classList.contains('hidden')) {
           if (e.key === 'ArrowDown') {
@@ -479,9 +519,16 @@
             return;
           }
         }
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
+        if (e.key === 'Enter') {
+          if (isTouchDevice) {
+            e.preventDefault();
+            document.execCommand('insertLineBreak');
+            return;
+          } else if (!e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+            return;
+          }
         }
         if (e.key === ' ') hideMentionList();
       };
@@ -575,6 +622,29 @@
             const name = e.target.innerText.replace('@', '');
             const user = Array.from(appState.users.values()).find(u => u.nickname === name);
             if (user) openUserCard(user.uid);
+          }
+        }
+        if (e.target.classList.contains('link-text')) {
+          const url = e.target.dataset.url;
+          if (url) {
+            if (localStorage.getItem('linkConfirmSkip') === 'true') {
+              window.open(url, '_blank');
+            } else {
+              const ok = await showModal({
+                title: '前往外部連結',
+                content: `<div>確定要前往外部連結嗎？<br><br><span style="color:#ffd54a;word-break:break-all;">${url}</span></div>
+                          <div class="link-confirm-container">
+                            <input type="checkbox" id="linkConfirmSkip" class="link-confirm-checkbox">
+                            <label for="linkConfirmSkip">下次不再詢問</label>
+                          </div>`,
+                showCancel: true,
+                confirmText: '確定',
+                cancelText: '取消'
+              });
+              if (ok) {
+                window.open(url, '_blank');
+              }
+            }
           }
         }
       });
@@ -816,6 +886,14 @@
         <div class="profile-modal-body">
           <div>註冊時間：${fmt(myProfile?.registeredAt)}</div>
           ${banInfo}
+          <div class="status-select-container">
+            <span class="status-select-label">線上狀態</span>
+            <select id="userStatusSelect" class="status-select">
+              <option value="online">線上</option>
+              <option value="dnd">請勿打擾</option>
+              <option value="invisible">隱身</option>
+            </select>
+          </div>
         </div>
         <div class="profile-modal-footer">
           <div class="profile-modal-footer-left">
@@ -828,6 +906,13 @@
         </div>`;
       elements.modalOverlay.classList.remove('hidden');
       elements.profileModal.classList.remove('hidden');
+      const statusSelect = document.getElementById('userStatusSelect');
+      if (statusSelect) {
+        statusSelect.value = localStorage.getItem('userStatusMode') || 'online';
+        statusSelect.onchange = () => {
+          setUserStatusMode(statusSelect.value);
+        };
+      }
       const avatarArea = document.getElementById('profileAvatarArea');
       avatarArea.onclick = () => elements.avatarFileInput.click();
       elements.avatarFileInput.onchange = (e) => {
@@ -1050,11 +1135,91 @@
       Array.from(appState.users.values()).forEach(u => usersByNick.set(u.nickname, u.uid));
 
       const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      return escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
+      let rendered = escaped.replace(/(^|\s)@([\p{L}\p{N}_-]{3,24})/gu, (m, sp, name) => {
         if (name === 'everyone') return `${sp}<span class="mention">@everyone</span>`;
         const uid = usersByNick.get(name);
         return uid ? `${sp}<span class="mention" data-uid="${uid}">@${name}</span>` : m;
       });
+      rendered = rendered.replace(/(https:\/\/[^\s]+)/g, (url) => {
+        return `<span class="link-text" data-url="${url}">${url}</span>`;
+      });
+      return rendered;
+    }
+
+    function setupPresence(uid) {
+      const connectedRef = ref(db, '.info/connected');
+      const statusRef = ref(db, `status/${uid}`);
+      onValue(connectedRef, (snap) => {
+        if (snap.val() === false) return;
+        const mode = localStorage.getItem('userStatusMode') || 'online';
+        let dbState = 'online';
+        let dbMode = mode;
+        if (mode === 'invisible') {
+          dbState = 'offline';
+          dbMode = 'offline';
+        }
+        const myDisconnect = onDisconnect(statusRef);
+        myDisconnect.set({
+          state: 'offline',
+          mode: 'offline',
+          lastChanged: serverTimestamp()
+        }).then(() => {
+          set(statusRef, {
+            state: dbState,
+            mode: dbMode,
+            lastChanged: serverTimestamp()
+          });
+        });
+      });
+    }
+
+    function setUserStatusMode(mode) {
+      localStorage.setItem('userStatusMode', mode);
+      const uid = appState.currentUser.uid;
+      const statusRef = ref(db, `status/${uid}`);
+      let dbState = 'online';
+      let dbMode = mode;
+      if (mode === 'invisible') {
+        dbState = 'offline';
+        dbMode = 'offline';
+      }
+      set(statusRef, {
+        state: dbState,
+        mode: dbMode,
+        lastChanged: serverTimestamp()
+      });
+    }
+
+    function playNotificationSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.35);
+      } catch (e) {}
+    }
+
+    function triggerNotification(msg) {
+      if (appState.isInitialising) return;
+      if (msg.uid === appState.currentUser.uid) return;
+      const myMode = localStorage.getItem('userStatusMode') || 'online';
+      if (myMode === 'dnd') return;
+      playNotificationSound();
+      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+        const sender = appState.users.get(msg.uid)?.nickname || msg.nickname || '使用者';
+        new Notification('新訊息 - SimpleChat', {
+          body: `${sender}: ${msg.text}`,
+          icon: 'icon/icon-512x512.png'
+        });
+      }
     }
     function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
   </script>
