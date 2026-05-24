@@ -1168,27 +1168,29 @@ button.danger:hover {
 
 .emoji-tabs {
   display: flex;
-  gap: 16px;
+  gap: 8px;
 }
 
 .emoji-tab {
-  background: none;
+  background: transparent !important;
   border: none;
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  padding: 2px 0;
-  border-bottom: 2px solid transparent;
-  transition: color 0.2s, border-color 0.2s;
+  padding: 6px 12px !important;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+  min-width: auto;
 }
 
 .emoji-tab.active {
+  background: rgba(255, 255, 255, 0.15) !important;
   color: var(--text);
-  border-bottom-color: var(--brand);
 }
 
 .emoji-tab:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
   color: var(--text);
 }
 
