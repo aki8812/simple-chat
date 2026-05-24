@@ -52,6 +52,10 @@
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
+          <div id="notificationBanner" class="banner hidden" style="background:#5865f2;border-left:4px solid #fff;">
+            開啟系統通知以接收新訊息提醒 -> 
+            <button id="enableNotifications" class="linklike" style="color:#fff;font-weight:bold;text-decoration:underline;">開啟通知</button>
+          </div>
         </div>
       </header>
       <div id="selectBar" class="select-bar hidden">
@@ -111,6 +115,8 @@
       userListContainer: document.getElementById('userListContainer'),
       verifyBanner: document.getElementById('verifyBanner'),
       banBanner: document.getElementById('banBanner'),
+      notificationBanner: document.getElementById('notificationBanner'),
+      enableNotificationsBtn: document.getElementById('enableNotifications'),
       resendVerify: document.getElementById('resendVerify'),
       newNickEl: document.getElementById('newNickname'),
       saveNickBtn: document.getElementById('saveNickname'),
@@ -224,9 +230,6 @@
         attachRealtimeListeners();
         setupEventListeners();
         setupPresence(appState.currentUser.uid);
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
 
       } catch (error) {
         showModal({ title: '錯誤', content: '無法載入聊天室資料，請稍後重試。' });
@@ -330,6 +333,10 @@
 
       elements.verifyBanner.classList.toggle('hidden', isVerified);
       elements.banBanner.classList.toggle('hidden', !isBanned);
+      if (elements.notificationBanner) {
+        const showNotifBanner = isVerified && !isBanned && ('Notification' in window) && (Notification.permission === 'default');
+        elements.notificationBanner.classList.toggle('hidden', !showNotifBanner);
+      }
       elements.adminPanel.classList.toggle('hidden', !isAdmin);
       elements.sidebarProfile.classList.toggle('hidden', isAdmin);
 
@@ -556,6 +563,19 @@
           showModal({ title: '錯誤', content: '寄送太頻繁，請稍後再試。' });
         }
       };
+      if (elements.enableNotificationsBtn) {
+        elements.enableNotificationsBtn.onclick = async () => {
+          try {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+              showModal({ title: '通知設定', content: '已成功開啟通知功能！' });
+            }
+          } catch (e) {
+            showModal({ title: '提示', content: '此裝置不支援通知功能。' });
+          }
+          updateAndRenderUI();
+        };
+      }
       elements.userListContainer.addEventListener('click', e => {
         const target = e.target.closest('.userrow');
         if (target) openUserCard(target.dataset.uid);
@@ -916,6 +936,13 @@
               </div>
             </div>
           </div>
+          <div class="status-select-container" style="margin-top:16px;">
+            <span class="status-select-label">系統通知</span>
+            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);padding:10px 12px;border-radius:6px;">
+              <span id="modalNotificationStatus" style="font-size:13px;color:var(--text);"></span>
+              <button id="modalNotificationBtn" style="padding:6px 12px;font-size:12px;border-radius:4px;display:none;"></button>
+            </div>
+          </div>
         </div>
         <div class="profile-modal-footer">
           <div class="profile-modal-footer-left">
@@ -943,6 +970,38 @@
           }
         };
       });
+      const notifStatus = document.getElementById('modalNotificationStatus');
+      const notifBtn = document.getElementById('modalNotificationBtn');
+      if (!('Notification' in window)) {
+        notifStatus.textContent = '此裝置不支援通知';
+      } else if (Notification.permission === 'granted') {
+        notifStatus.textContent = '通知已啟用';
+        notifBtn.textContent = '已啟用';
+        notifBtn.style.display = 'block';
+        notifBtn.style.background = '#43b581';
+        notifBtn.disabled = true;
+      } else if (Notification.permission === 'denied') {
+        notifStatus.textContent = '通知已被瀏覽器拒絕';
+        notifBtn.textContent = '已拒絕';
+        notifBtn.style.display = 'block';
+        notifBtn.style.background = '#f04747';
+        notifBtn.disabled = true;
+      } else {
+        notifStatus.textContent = '通知尚未啟用';
+        notifBtn.textContent = '立即啟用';
+        notifBtn.style.display = 'block';
+        notifBtn.style.background = 'var(--brand)';
+        notifBtn.onclick = async () => {
+          try {
+            const res = await Notification.requestPermission();
+            if (res === 'granted') {
+              showModal({ title: '通知設定', content: '通知功能已成功開啟！' });
+            }
+          } catch (e) {}
+          openProfileModal();
+          updateAndRenderUI();
+        };
+      }
       const avatarArea = document.getElementById('profileAvatarArea');
       avatarArea.onclick = () => elements.avatarFileInput.click();
       elements.avatarFileInput.onchange = (e) => {
@@ -1015,7 +1074,10 @@
           updateAndRenderUI();
           showModal({ title: '完成', content: '狀態已更新' });
         } else {
-          showModal({ title: '提示', content: '沒有需要儲存的變更' });
+          appState.pendingAvatarBlob = null;
+          appState.profileDirty = false;
+          elements.modalOverlay.classList.add('hidden');
+          elements.profileModal.classList.add('hidden');
         }
       };
       document.getElementById('profileClose').onclick = async () => {
