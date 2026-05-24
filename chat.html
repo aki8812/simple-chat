@@ -71,10 +71,21 @@
           <div id="mentionList" class="mention-list hidden"></div>
           <div id="emojiPanel" class="emoji-panel hidden">
             <div class="emoji-header">
-              <span>表情符號</span>
+              <div class="emoji-tabs">
+                <button id="tabEmoji" class="emoji-tab active">表情符號</button>
+                <button id="tabGif" class="emoji-tab">GIF</button>
+              </div>
               <button id="emojiClose" class="emoji-close-btn">✕</button>
             </div>
-            <div class="emoji-grid"></div>
+            <div id="emojiContainer" class="emoji-container">
+              <div class="emoji-grid"></div>
+            </div>
+            <div id="gifContainer" class="gif-container hidden">
+              <div class="gif-search-box">
+                <input type="text" id="gifSearchInput" placeholder="搜尋 GIF..." autocomplete="off">
+              </div>
+              <div class="gif-grid" id="gifGrid"></div>
+            </div>
           </div>
           <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"
             data-placeholder="載入中..."></div>
@@ -467,10 +478,24 @@
                 <div class="bubble-name" data-uid="${msg.uid}">${authorName}</div>
                 ${deleteBtnHtml}
             </div>
-            <div class="bubble-text">${renderWithMentions(msg.text)}</div>
+            ${msg.type === 'gif' 
+              ? `<img class="chat-gif" src="${msg.url}" alt="GIF">`
+              : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
       return wrap;
+    }
+
+    async function sendGifMessage(url) {
+      const myProfile = appState.users.get(appState.currentUser.uid);
+      try {
+        await push(ref(db, 'messages'), {
+          uid: appState.currentUser.uid, type: 'gif', url, time: Date.now(), nickname: myProfile.nickname,
+        });
+        hideEmojiPanel();
+      } catch (e) {
+        showModal({ title: '錯誤', content: '發送 GIF 失敗：' + e.message });
+      }
     }
 
     async function sendMessage() {
@@ -1439,9 +1464,83 @@
           selection.removeAllRanges();
           selection.addRange(savedSelectionRange);
         }
+        if (document.getElementById('tabGif').classList.contains('active') && document.getElementById('gifSearchInput').value === '') {
+          loadGifs();
+        }
       }
     };
     emojiCloseBtn.onclick = hideEmojiPanel;
+
+    const tabEmoji = document.getElementById('tabEmoji');
+    const tabGif = document.getElementById('tabGif');
+    const emojiContainer = document.getElementById('emojiContainer');
+    const gifContainer = document.getElementById('gifContainer');
+    const gifSearchInput = document.getElementById('gifSearchInput');
+    const gifGrid = document.getElementById('gifGrid');
+
+    tabEmoji.onclick = () => {
+      tabEmoji.classList.add('active');
+      tabGif.classList.remove('active');
+      emojiContainer.classList.remove('hidden');
+      gifContainer.classList.add('hidden');
+    };
+
+    tabGif.onclick = () => {
+      tabGif.classList.add('active');
+      tabEmoji.classList.remove('active');
+      gifContainer.classList.remove('hidden');
+      emojiContainer.classList.add('hidden');
+      if (gifGrid.innerHTML === '') loadGifs();
+    };
+
+    let gifDebounceTimer = null;
+    gifSearchInput.addEventListener('input', () => {
+      clearTimeout(gifDebounceTimer);
+      gifDebounceTimer = setTimeout(() => loadGifs(gifSearchInput.value.trim()), 500);
+    });
+
+    async function loadGifs(query = '') {
+      gifGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:10px;color:var(--muted);">載入中...</div>';
+      try {
+        let urls = [];
+        if (!query) {
+          const saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
+          if (saved.length > 0) {
+            urls = saved;
+          } else {
+            const res = await fetch('https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20');
+            const data = await res.json();
+            urls = data.results.map(r => r.media[0].nanogif.url);
+          }
+        } else {
+          const res = await fetch(`https://g.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=LIVDSRZULELA&limit=20&locale=zh_TW`);
+          const data = await res.json();
+          urls = data.results.map(r => r.media[0].nanogif.url);
+        }
+        
+        if (urls.length === 0) {
+          gifGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:10px;color:var(--muted);">找不到 GIF</div>';
+          return;
+        }
+
+        gifGrid.innerHTML = '';
+        urls.forEach(url => {
+          const img = document.createElement('img');
+          img.className = 'gif-item';
+          img.src = url;
+          img.loading = 'lazy';
+          img.onclick = () => {
+            sendGifMessage(url);
+            let saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
+            saved = [url, ...saved.filter(u => u !== url)].slice(0, 20);
+            localStorage.setItem('frequentGifs', JSON.stringify(saved));
+          };
+          gifGrid.appendChild(img);
+        });
+      } catch (e) {
+        gifGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:10px;color:var(--danger);">載入失敗</div>';
+      }
+    }
     const appEl = document.querySelector('.app');
     const sidebarOverlay = document.getElementById('sidebarOverlay');
     document.getElementById('toggleSidebarBtn').onclick = () => {

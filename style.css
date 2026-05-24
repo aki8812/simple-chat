@@ -1164,8 +1164,32 @@ button.danger:hover {
   justify-content: space-between;
   padding: 8px 10px;
   border-bottom: 1px solid #1f2225;
-  font-size: 13px;
+}
+
+.emoji-tabs {
+  display: flex;
+  gap: 16px;
+}
+
+.emoji-tab {
+  background: none;
+  border: none;
   color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.emoji-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--brand);
+}
+
+.emoji-tab:hover {
+  color: var(--text);
 }
 
 .emoji-close-btn {
@@ -1208,6 +1232,56 @@ button.danger:hover {
 
 .emoji-item:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.gif-search-box {
+  padding: 8px;
+  background: var(--bg2);
+  border-bottom: 1px solid #1f2225;
+}
+
+.gif-search-box input {
+  width: 100%;
+  background: #1e2124;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
+
+.gif-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #3b4050 #1c1f22;
+}
+
+.gif-item {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.gif-item:hover {
+  opacity: 0.8;
+}
+
+.chat-gif {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  display: block;
+  margin-top: 4px;
+  object-fit: cover;
 }
 
 @media (max-width: 768px) {
