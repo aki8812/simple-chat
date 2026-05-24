@@ -295,16 +295,20 @@
 
     const AVATAR_OVERLAY_HTML = '<div class="avatar-overlay"><svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg><span>更改頭像</span></div>';
 
-    function avatarHtml(user, className = 'avatar', defaultClass = 'avatar-default', withOverlay = false) {
+    function avatarHtml(user, className = 'avatar', defaultClass = 'avatar-default', withOverlay = false, showStatus = true) {
       const overlay = withOverlay ? AVATAR_OVERLAY_HTML : '';
-      const uid = user?.uid;
+      const uid = user?.uid || (className.startsWith('profile') ? appState.currentUser?.uid : null);
       let statusDotHtml = '';
-      if (uid) {
+      if (showStatus && uid) {
         const s = appState.statuses.get(uid);
-        if (s && s.state === 'online') {
-          statusDotHtml = `<span class="status-dot ${s.mode === 'dnd' ? 'dnd' : 'online'}"></span>`;
-        } else if (s && s.state === 'offline') {
-          statusDotHtml = `<span class="status-dot invisible"></span>`;
+        const currentMode = (uid === appState.currentUser?.uid)
+          ? (localStorage.getItem('userStatusMode') || 'online')
+          : (s?.mode || 'online');
+        const isOnline = (uid === appState.currentUser?.uid)
+          ? (currentMode !== 'invisible')
+          : (s?.state === 'online');
+        if (isOnline) {
+          statusDotHtml = `<span class="status-dot ${currentMode === 'dnd' ? 'dnd' : 'online'}"></span>`;
         } else {
           statusDotHtml = `<span class="status-dot invisible"></span>`;
         }
@@ -312,7 +316,8 @@
       const imgHtml = (user && user.avatarUrl)
         ? `<img class="${className}" src="${user.avatarUrl}" alt="">`
         : `<div class="${defaultClass}">${DEFAULT_AVATAR_SVG}</div>`;
-      return `<div class="avatar-container">${imgHtml}${overlay}${statusDotHtml}</div>`;
+      const containerClass = className ? `${className}-container` : '';
+      return `<div class="avatar-container ${containerClass}">${imgHtml}${overlay}${statusDotHtml}</div>`;
     }
 
     function renderControls() {
@@ -448,7 +453,7 @@
       const deleteBtnHtml = canDelete ? `<button class="del-btn" data-key="${key}">刪除</button>` : '';
       const authorUser = users.get(msg.uid) || { uid: msg.uid, nickname: msg.nickname };
       const authorName = authorUser?.nickname || msg.nickname || '...';
-      const bubbleAvatarHtml = avatarHtml(authorUser, 'bubble-avatar', 'bubble-avatar-default');
+      const bubbleAvatarHtml = avatarHtml(authorUser, 'bubble-avatar', 'bubble-avatar-default', false, false);
       wrap.innerHTML = `
         <div class="bubble">
             <div class="bubble-head">
@@ -888,11 +893,28 @@
           ${banInfo}
           <div class="status-select-container">
             <span class="status-select-label">線上狀態</span>
-            <select id="userStatusSelect" class="status-select">
-              <option value="online">線上</option>
-              <option value="dnd">請勿打擾</option>
-              <option value="invisible">隱身</option>
-            </select>
+            <div class="status-picker" id="statusPicker">
+              <div class="status-option" data-value="online">
+                <span class="status-option-dot online"></span>
+                <div class="status-option-info">
+                  <span class="status-option-name">線上</span>
+                </div>
+              </div>
+              <div class="status-option" data-value="dnd">
+                <span class="status-option-dot dnd"></span>
+                <div class="status-option-info">
+                  <span class="status-option-name">請勿打擾</span>
+                  <span class="status-option-desc">你將不會收到通知</span>
+                </div>
+              </div>
+              <div class="status-option" data-value="invisible">
+                <span class="status-option-dot invisible"></span>
+                <div class="status-option-info">
+                  <span class="status-option-name">隱身</span>
+                  <span class="status-option-desc">你將顯示為離線</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="profile-modal-footer">
@@ -906,13 +928,21 @@
         </div>`;
       elements.modalOverlay.classList.remove('hidden');
       elements.profileModal.classList.remove('hidden');
-      const statusSelect = document.getElementById('userStatusSelect');
-      if (statusSelect) {
-        statusSelect.value = localStorage.getItem('userStatusMode') || 'online';
-        statusSelect.onchange = () => {
-          setUserStatusMode(statusSelect.value);
+      const currentMode = localStorage.getItem('userStatusMode') || 'online';
+      let pendingStatus = currentMode;
+      const picker = document.getElementById('statusPicker');
+      const options = picker.querySelectorAll('.status-option');
+      options.forEach(opt => {
+        if (opt.dataset.value === currentMode) opt.classList.add('active');
+        opt.onclick = () => {
+          options.forEach(o => o.classList.remove('active'));
+          opt.classList.add('active');
+          pendingStatus = opt.dataset.value;
+          if (pendingStatus !== currentMode) {
+            appState.profileDirty = true;
+          }
         };
-      }
+      });
       const avatarArea = document.getElementById('profileAvatarArea');
       avatarArea.onclick = () => elements.avatarFileInput.click();
       elements.avatarFileInput.onchange = (e) => {
@@ -968,7 +998,25 @@
         } catch { showModal({ title: '錯誤', content: '刪除失敗，請重新登入後再試' }); }
       };
       document.getElementById('profileSave').onclick = async () => {
-        showModal({ title: '提示', content: '沒有需要儲存的變更' });
+        const currentMode = localStorage.getItem('userStatusMode') || 'online';
+        if (pendingStatus !== currentMode) {
+          setUserStatusMode(pendingStatus);
+          const avatarArea = document.getElementById('profileAvatarArea');
+          if (avatarArea) {
+            const dot = avatarArea.querySelector('.status-dot');
+            if (dot) {
+              dot.className = 'status-dot';
+              if (pendingStatus === 'dnd') dot.classList.add('dnd');
+              else if (pendingStatus === 'invisible') dot.classList.add('invisible');
+              else dot.classList.add('online');
+            }
+          }
+          appState.profileDirty = false;
+          updateAndRenderUI();
+          showModal({ title: '完成', content: '狀態已更新' });
+        } else {
+          showModal({ title: '提示', content: '沒有需要儲存的變更' });
+        }
       };
       document.getElementById('profileClose').onclick = async () => {
         if (appState.profileDirty) {

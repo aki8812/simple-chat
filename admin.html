@@ -183,7 +183,7 @@
           const imgHtml = (user && user.avatarUrl)
             ? `<img class="admin-avatar" src="${user.avatarUrl}" alt="">`
             : `<div class="admin-avatar-default">${DEFAULT_AVATAR_SVG}</div>`;
-          return `<div class="avatar-container">${imgHtml}${statusDotHtml}</div>`;
+          return `<div class="avatar-container admin-avatar-container">${imgHtml}${statusDotHtml}</div>`;
         }
 
         function createSectionHtml(title, userArray) {

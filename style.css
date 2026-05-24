@@ -1289,17 +1289,8 @@ button.danger:hover {
   border: 2px solid #747f8d;
 }
 
-.bubble-head .status-dot {
-  width: 8px;
-  height: 8px;
-  border-width: 1.5px;
-  bottom: -1px;
-  right: -1px;
-}
-
-.bubble-head .status-dot.dnd::after {
-  width: 3px;
-  height: 1px;
+.bubble-head .avatar-container .status-dot {
+  display: none;
 }
 
 .profile-modal-avatar-container .status-dot,
@@ -1317,6 +1308,26 @@ button.danger:hover {
   height: 2px;
 }
 
+.profile-avatar-container .status-dot,
+.profile-avatar-default-container .status-dot {
+  width: 12px;
+  height: 12px;
+  border-width: 2.5px;
+  border-color: var(--brand2);
+  bottom: -1px;
+  right: -1px;
+}
+
+.profile-avatar-container .status-dot.dnd::after,
+.profile-avatar-default-container .status-dot.dnd::after {
+  width: 5px;
+  height: 1.5px;
+}
+
+.profile-btn:hover .status-dot {
+  border-color: #6a707a;
+}
+
 .status-select-container {
   display: flex;
   flex-direction: column;
@@ -1328,21 +1339,82 @@ button.danger:hover {
   font-size: 12px;
   font-weight: bold;
   color: var(--muted);
+  margin-bottom: 2px;
 }
 
-.status-select {
-  background: #1e2124;
-  border: 1px solid #444;
-  color: #fff;
-  padding: 8px;
+.status-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
   border-radius: 6px;
-  outline: none;
   cursor: pointer;
-  font-size: 14px;
+  transition: background 0.15s;
+  user-select: none;
 }
 
-.status-select:focus {
-  border-color: var(--brand);
+.status-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.status-option.active {
+  background: rgba(88, 101, 242, 0.25);
+}
+
+.status-option-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.status-option-dot.online {
+  background-color: #43b581;
+}
+
+.status-option-dot.dnd {
+  background-color: #f04747;
+}
+
+.status-option-dot.dnd::after {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 2px;
+  background-color: var(--bg2);
+  border-radius: 1px;
+}
+
+.status-option-dot.invisible {
+  background-color: transparent;
+  border: 2px solid #747f8d;
+}
+
+.status-option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.status-option-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.status-option-desc {
+  font-size: 11px;
+  color: #72767d;
 }
 
 @media (hover: hover) {
