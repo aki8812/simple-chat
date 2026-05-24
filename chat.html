@@ -529,7 +529,6 @@
         await push(ref(db, 'messages'), {
           uid: appState.currentUser.uid, type: 'gif', url, text: '[GIF 貼圖]', time: Date.now(), nickname: myProfile.nickname,
         });
-        hideEmojiPanel();
       } catch (e) {
         showModal({ title: '錯誤', content: '發送 GIF 失敗：' + e.message });
       }
@@ -1508,6 +1507,12 @@
       }
     };
     emojiCloseBtn.onclick = hideEmojiPanel;
+
+    document.addEventListener('click', (e) => {
+      if (emojiPanel.classList.contains('hidden')) return;
+      if (emojiPanel.contains(e.target) || emojiBtn.contains(e.target) || elements.inputEl.contains(e.target)) return;
+      hideEmojiPanel();
+    });
 
     const tabEmoji = document.getElementById('tabEmoji');
     const tabGif = document.getElementById('tabGif');
