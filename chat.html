@@ -411,7 +411,7 @@
       elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
 
       if (isInitial) {
-        scrollToBottomAfterImages(elements.messagesBox, false);
+        scrollToBottomAfterImages(elements.messagesBox, true);
         setTimeout(() => {
           appState.isInitialising = false;
         }, 1000);
