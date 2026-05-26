@@ -286,7 +286,7 @@
         appState.latestMessageTime = msg.time;
         const el = createMessageElement(snap.key, msg);
         elements.messagesBox.appendChild(el);
-        scrollToBottomAfterImages(elements.messagesBox);
+        scrollToBottomAfterImages(elements.messagesBox, !appState.isInitialising);
         triggerNotification(msg);
       });
 
@@ -382,24 +382,34 @@
       elements.userListContainer.innerHTML = `<div class="userlist">${html}</div>`;
     }
 
-    function scrollToBottomAfterImages(container) {
+    function scrollToBottomAfterImages(container, smooth = false) {
+      const doScroll = () => {
+        if (smooth) {
+          container.style.scrollBehavior = 'smooth';
+          container.scrollTop = container.scrollHeight;
+          container.style.scrollBehavior = '';
+        } else {
+          container.scrollTop = container.scrollHeight;
+        }
+      };
+      doScroll();
       const images = container.querySelectorAll('img');
       const unloaded = Array.from(images).filter(img => !img.complete);
-      if (unloaded.length === 0) {
-        container.scrollTop = container.scrollHeight;
-        return;
-      }
-      let loaded = 0;
-      const check = () => {
-        loaded++;
-        container.scrollTop = container.scrollHeight;
-        if (loaded >= unloaded.length) return;
+      if (unloaded.length === 0) return;
+      let pending = false;
+      const batchScroll = () => {
+        if (!pending) {
+          pending = true;
+          requestAnimationFrame(() => {
+            doScroll();
+            pending = false;
+          });
+        }
       };
       unloaded.forEach(img => {
-        img.addEventListener('load', check, { once: true });
-        img.addEventListener('error', check, { once: true });
+        img.addEventListener('load', batchScroll, { once: true });
+        img.addEventListener('error', batchScroll, { once: true });
       });
-      container.scrollTop = container.scrollHeight;
     }
 
     function renderAllMessages(isInitial = false) {
@@ -407,7 +417,7 @@
       elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
 
       if (isInitial) {
-        scrollToBottomAfterImages(elements.messagesBox);
+        scrollToBottomAfterImages(elements.messagesBox, false);
         setTimeout(() => {
           appState.isInitialising = false;
         }, 1000);

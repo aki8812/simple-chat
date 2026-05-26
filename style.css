@@ -1115,7 +1115,6 @@ button.danger:hover {
 .chat-box {
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
-  scroll-behavior: smooth;
 }
 
 .sidebar-overlay {
