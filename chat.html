@@ -1631,6 +1631,13 @@
       appEl.classList.remove('sidebar-open');
     }
   </script>
+  <script>
+    function setAppHeight() {
+      document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+    }
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+  </script>
 </body>
 
 </html>

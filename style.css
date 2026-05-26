@@ -95,14 +95,10 @@ body {
 .app {
   display: flex;
   height: calc(100vh - (48px + env(safe-area-inset-top, 0px)));
+  height: calc(100dvh - (48px + env(safe-area-inset-top, 0px)));
+  height: calc(var(--app-height, 100vh) - (48px + env(safe-area-inset-top, 0px)));
   position: relative;
   overflow: hidden;
-}
-
-@supports (height: 100dvh) {
-  .app {
-    height: calc(100dvh - (48px + env(safe-area-inset-top, 0px)));
-  }
 }
 
 .sidebar {
