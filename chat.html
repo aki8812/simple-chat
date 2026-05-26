@@ -384,13 +384,7 @@
 
     function scrollToBottomAfterImages(container, smooth = false) {
       const doScroll = () => {
-        if (smooth) {
-          container.style.scrollBehavior = 'smooth';
-          container.scrollTop = container.scrollHeight;
-          container.style.scrollBehavior = '';
-        } else {
-          container.scrollTop = container.scrollHeight;
-        }
+        container.scrollTo({ top: container.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
       };
       doScroll();
       const images = container.querySelectorAll('img');
