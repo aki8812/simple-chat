@@ -242,6 +242,10 @@
         bansSnap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
 
         await loadInitialMessages();
+        if (!appState.users.has(appState.currentUser.uid)) {
+          await signOut(auth);
+          return;
+        }
         updateAndRenderUI(true);
         attachRealtimeListeners();
         setupEventListeners();
@@ -987,6 +991,7 @@
         </div>
         <div class="profile-modal-body-wrapper" style="position: relative;">
           <div class="profile-modal-body" id="profileModalBody">
+            <div>電子郵件：${currentUser.email}</div>
             <div>註冊時間：${fmt(myProfile?.registeredAt)}</div>
             ${banInfo}
             <div class="status-select-container">

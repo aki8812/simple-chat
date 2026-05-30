@@ -40,9 +40,10 @@
       signInWithEmailAndPassword,
       createUserWithEmailAndPassword,
       sendEmailVerification,
-      sendPasswordResetEmail
+      sendPasswordResetEmail,
+      signOut
     } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { ref, set, runTransaction } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
+    import { ref, set, runTransaction, get } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js';
 
     const email = document.getElementById('email');
     const password = document.getElementById('password');
@@ -140,7 +141,12 @@
       submitBtn.disabled = true;
       try {
         if (isLogin) {
-          await signInWithEmailAndPassword(auth, emailVal, pwdVal);
+          const cred = await signInWithEmailAndPassword(auth, emailVal, pwdVal);
+          const userSnap = await get(ref(db, `users/${cred.user.uid}`));
+          if (!userSnap.exists()) {
+            await signOut(auth);
+            throw { code: 'auth/user-not-found' };
+          }
           window.location.href = 'chat.html';
         } else {
           sessionStorage.setItem(REDIRECT_GUARD_KEY, '1');
