@@ -620,18 +620,19 @@
                 ${deleteBtnHtml}
             </div>
             ${msg.type === 'gif' 
-              ? `<img class="chat-gif" src="${msg.url ? msg.url.replace('mediumgif', 'tinygif') : ''}" loading="lazy" alt="GIF">`
+              ? `<img class="chat-gif" src="${msg.url ? msg.url.replace('mediumgif', 'tinygif') : ''}" ${msg.width && msg.height ? `style="aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;"` : `style="aspect-ratio:16/9;width:300px;max-width:100%;object-fit:contain;height:auto;"`} loading="lazy" alt="GIF">`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
       return wrap;
     }
 
-    window.sendGifMessage = async function(url) {
+    window.sendGifMessage = async function(url, width, height) {
       const myProfile = appState.users.get(appState.currentUser.uid);
       try {
         await push(ref(db, 'messages'), {
           uid: appState.currentUser.uid, type: 'gif', url, text: '[GIF 貼圖]', time: Date.now(), nickname: myProfile.nickname,
+          width: width || 0, height: height || 0
         });
       } catch (e) {
         showModal({ title: '錯誤', content: '發送 GIF 失敗：' + e.message });
@@ -1752,7 +1753,7 @@
         if (endpoint) {
           const res = await fetch(endpoint);
           const data = await res.json();
-          items = data.results.map(r => ({ preview: r.media[0].tinygif.url, full: r.media[0].mediumgif.url }));
+           items = data.results.map(r => ({ preview: r.media[0].tinygif.url, full: r.media[0].mediumgif.url, width: r.media[0].tinygif.dims[0], height: r.media[0].tinygif.dims[1] }));
           gifNextCursor = data.next || '';
         }
 
@@ -1783,7 +1784,7 @@
           img.src = item.preview;
           img.loading = 'lazy';
           img.onclick = () => {
-            window.sendGifMessage(item.preview);
+            window.sendGifMessage(item.preview, item.width, item.height);
             let saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
             saved = saved.map(s => typeof s === 'string' ? { preview: s, full: s } : s);
             saved = [item, ...saved.filter(s => s.preview !== item.preview)].slice(0, 20);

@@ -729,6 +729,7 @@ button.danger:hover {
   flex-direction: column;
   gap: 10px;
   background: var(--bg);
+  overflow-anchor: none;
 }
 
 .input-area {
@@ -1278,13 +1279,9 @@ button.danger:hover {
 }
 
 .chat-gif {
-  width: 400px;
-  max-width: 100%;
   border-radius: 8px;
   display: block;
   margin-top: 8px;
-  object-fit: cover;
-  aspect-ratio: 16 / 9;
   background: rgba(255, 255, 255, 0.05);
 }
 
