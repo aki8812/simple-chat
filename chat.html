@@ -87,10 +87,10 @@
               <div class="gif-grid" id="gifGrid"></div>
             </div>
           </div>
-          <div id="messageInput" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"
+          <div id="messageInput" contenteditable="false" role="textbox" aria-multiline="true" spellcheck="false"
             data-placeholder="載入中..."></div>
         </div>
-        <button id="emojiBtn" type="button" class="emoji-btn">
+        <button id="emojiBtn" type="button" class="emoji-btn" disabled>
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
             <circle cx="8.5" cy="10" r="1.2" fill="currentColor" />
@@ -353,6 +353,7 @@
       const isDisabled = !isVerified || isBanned || !hasNick;
       elements.inputEl.contentEditable = !isDisabled;
       elements.sendBtn.disabled = isDisabled;
+      document.getElementById('emojiBtn').disabled = isDisabled;
       const placeholder = isDisabled
         ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
         : '輸入訊息...';
@@ -559,22 +560,23 @@
     }
 
     function setupEventListeners() {
-      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isMobileDevice = window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 768;
       elements.sendBtn.addEventListener('mousedown', (e) => e.preventDefault());
+      elements.sendBtn.addEventListener('click', () => sendMessage());
       elements.sendBtn.addEventListener('touchstart', (e) => {
         e.preventDefault();
         sendMessage();
       });
 
       elements.inputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice) {
+        if (e.key === 'Enter' && !e.shiftKey && !isMobileDevice) {
           e.preventDefault();
           if (appState.mentionIndex >= 0 && !elements.mentionList.classList.contains('hidden')) {
             insertMention(appState.mentionItems[appState.mentionIndex].nickname);
           } else {
             sendMessage();
           }
-        } else if (e.key === 'Enter' && isTouchDevice && !elements.mentionList.classList.contains('hidden')) {
+        } else if (e.key === 'Enter' && isMobileDevice && !elements.mentionList.classList.contains('hidden')) {
           e.preventDefault();
           insertMention(appState.mentionItems[appState.mentionIndex].nickname);
         } else if (e.key === 'ArrowUp' && !elements.mentionList.classList.contains('hidden')) {
