@@ -175,6 +175,7 @@
       profileDirty: false,
       pendingAvatarBlob: null,
       statuses: new Map(),
+      isDeletingAccount: false,
     };
 
     function saveMentionHistory(nickname) {
@@ -263,7 +264,7 @@
           const p = u.val()?.profile;
           if (p) appState.users.set(u.key, { uid: u.key, ...p });
         });
-        if (!appState.isInitialising && appState.currentUser && !appState.users.has(appState.currentUser.uid)) {
+        if (!appState.isDeletingAccount && !appState.isInitialising && appState.currentUser && !appState.users.has(appState.currentUser.uid)) {
           signOut(auth);
           return;
         }
@@ -1177,6 +1178,7 @@
             showModal({ title: '需要重新登入', content: '為了安全起見，刪除帳號需要近期登入。請先登出後重新登入，再執行刪除操作。' });
             return;
           }
+          appState.isDeletingAccount = true;
           const uid = currentUser.uid;
           const profile = users.get(uid);
           if (profile?.nicknameLower) await set(ref(db, `nicknames/${profile.nicknameLower}`), null);
@@ -1192,6 +1194,7 @@
           await deleteUser(currentUser);
           window.location.href = 'login.html';
         } catch (e) {
+          appState.isDeletingAccount = false;
           if (e.code === 'auth/requires-recent-login') {
             showModal({ title: '需要重新登入', content: '為了安全起見，刪除帳號需要近期登入。請先登出後重新登入，再執行刪除操作。' });
           } else {
