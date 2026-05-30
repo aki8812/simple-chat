@@ -441,26 +441,49 @@
     }
 
     function scrollToBottomAfterImages(container, smooth = false) {
-      const target = container.scrollHeight;
-      container.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'instant' });
+      if (!container) return;
 
-      const images = container.querySelectorAll('img');
-      const unloaded = Array.from(images).filter(img => !img.complete);
-      if (unloaded.length === 0) return;
-      let pending = false;
-      const batchScroll = () => {
-        if (!pending) {
-          pending = true;
-          requestAnimationFrame(() => {
-            container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
-            pending = false;
-          });
-        }
+      const performScroll = () => {
+        const target = container.scrollHeight;
+        container.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'instant' });
       };
-      unloaded.forEach(img => {
-        img.addEventListener('load', batchScroll, { once: true });
-        img.addEventListener('error', batchScroll, { once: true });
-      });
+      
+      performScroll();
+
+      if (!container._resizeObserver) {
+        container._resizeObserver = new ResizeObserver(() => {
+           const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+           if (appState.isInitialising || isAtBottom) {
+             container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
+           }
+        });
+        
+        Array.from(container.children).forEach(child => {
+            container._resizeObserver.observe(child);
+        });
+        
+        const originalAppendChild = container.appendChild.bind(container);
+        container.appendChild = (node) => {
+            originalAppendChild(node);
+            container._resizeObserver.observe(node);
+        };
+        const originalInsertBefore = container.insertBefore.bind(container);
+        container.insertBefore = (newNode, referenceNode) => {
+            originalInsertBefore(newNode, referenceNode);
+            container._resizeObserver.observe(newNode);
+        };
+      } else {
+        const images = container.querySelectorAll('img:not([data-observed])');
+        images.forEach(img => {
+          img.dataset.observed = 'true';
+          img.addEventListener('load', () => {
+             const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+             if (appState.isInitialising || isAtBottom) {
+                 performScroll();
+             }
+          }, { once: true });
+        });
+      }
     }
 
     function showUnreadBanner() {
