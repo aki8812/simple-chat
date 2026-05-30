@@ -31,7 +31,7 @@
     "users": {
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+        ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.uid == $uid)",
         "profile": {
           ".read": "auth != null",
           ".write": "auth != null && (auth.uid == $uid || !data.exists())"
@@ -74,7 +74,7 @@
     "status": {
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null && auth.uid == $uid"
+        ".write": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).exists())"
       }
     }
   }

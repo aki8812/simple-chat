@@ -320,8 +320,8 @@
                 const profile = appState.users.get(uid);
                 if (profile?.nicknameLower) await set(ref(db, `nicknames/${profile.nicknameLower}`), null);
                 await remove(ref(db, `users/${uid}`));
-                await remove(ref(db, `admins/${uid}`));
-                await remove(ref(db, `bans/${uid}`));
+                if (appState.admins.has(uid)) await remove(ref(db, `admins/${uid}`));
+                if (appState.bans.has(uid)) await remove(ref(db, `bans/${uid}`));
                 await remove(ref(db, `status/${uid}`));
                 const msgsSnap = await get(query(ref(db, 'messages'), orderByChild('uid')));
                 const deletes = [];
