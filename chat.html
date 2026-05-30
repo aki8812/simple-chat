@@ -458,20 +458,21 @@
            }
         });
         
-        Array.from(container.children).forEach(child => {
-            container._resizeObserver.observe(child);
-        });
+        const observeChildren = () => {
+            Array.from(container.children).forEach(child => {
+                if (!child._isObserved) {
+                    child._isObserved = true;
+                    container._resizeObserver.observe(child);
+                }
+            });
+        };
         
-        const originalAppendChild = container.appendChild.bind(container);
-        container.appendChild = (node) => {
-            originalAppendChild(node);
-            container._resizeObserver.observe(node);
-        };
-        const originalInsertBefore = container.insertBefore.bind(container);
-        container.insertBefore = (newNode, referenceNode) => {
-            originalInsertBefore(newNode, referenceNode);
-            container._resizeObserver.observe(newNode);
-        };
+        observeChildren();
+        
+        container._mutationObserver = new MutationObserver(() => {
+            observeChildren();
+        });
+        container._mutationObserver.observe(container, { childList: true });
       } else {
         const images = container.querySelectorAll('img:not([data-observed])');
         images.forEach(img => {
