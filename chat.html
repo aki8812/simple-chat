@@ -445,7 +445,9 @@
 
       const performScroll = () => {
         const target = container.scrollHeight;
+        container.style.scrollBehavior = 'auto';
         container.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'instant' });
+        container.style.scrollBehavior = '';
       };
       
       performScroll();
@@ -454,7 +456,9 @@
         container._resizeObserver = new ResizeObserver(() => {
            const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
            if (appState.isInitialising || isAtBottom) {
+             container.style.scrollBehavior = 'auto';
              container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
+             container.style.scrollBehavior = '';
            }
         });
         
@@ -468,6 +472,7 @@
         };
         
         observeChildren();
+        container._resizeObserver.observe(container);
         
         container._mutationObserver = new MutationObserver(() => {
             observeChildren();
@@ -646,7 +651,7 @@
                 ${deleteBtnHtml}
             </div>
             ${msg.type === 'gif' 
-              ? `<img class="chat-gif" src="${msg.url || ''}" ${msg.width && msg.height ? `style="aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;"` : `style="max-height:250px;width:auto;max-width:100%;height:auto;"`} loading="lazy" alt="GIF">`
+              ? `<img class="chat-gif" src="${msg.url || ''}" ${msg.width && msg.height ? `style="aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;"` : `style="aspect-ratio:1/1;min-height:200px;max-height:250px;object-fit:cover;max-width:100%;width:auto;"`} loading="lazy" alt="GIF">`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
