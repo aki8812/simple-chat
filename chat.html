@@ -350,6 +350,7 @@
           appState.messages.delete(snap.key);
           const msgElement = elements.messagesBox.querySelector(`[data-msg-id="${snap.key}"]`);
           if (msgElement) msgElement.remove();
+          saveMessagesToLocalCache();
         }
       });
     }
@@ -535,7 +536,7 @@
         });
         appState.latestMessageTime = maxTime;
         appState.oldestMessageTime = minTime;
-        appState.hasMoreOldMessages = messageCount === 30;
+        appState.hasMoreOldMessages = initialSnap.size === 30;
       } else {
         appState.hasMoreOldMessages = false;
       }
@@ -545,58 +546,62 @@
       if (appState.isLoadingMore || !appState.hasMoreOldMessages) return;
       appState.isLoadingMore = true;
 
-      const msgQuery = query(ref(db, 'messages'), orderByChild('time'), endBefore(appState.oldestMessageTime), limitToLast(30));
-      const snap = await get(msgQuery);
+      try {
+        const msgQuery = query(ref(db, 'messages'), orderByChild('time'), endBefore(appState.oldestMessageTime), limitToLast(30));
+        const snap = await get(msgQuery);
 
-      if (snap.exists()) {
-        const oldScrollHeight = elements.messagesBox.scrollHeight;
-        const oldScrollTop = elements.messagesBox.scrollTop;
-        const newMessages = [];
-        let minTime = appState.oldestMessageTime;
-        let messageCount = 0;
+        if (snap.exists()) {
+          const oldScrollHeight = elements.messagesBox.scrollHeight;
+          const oldScrollTop = elements.messagesBox.scrollTop;
+          const newMessages = [];
+          let minTime = appState.oldestMessageTime;
+          let messageCount = 0;
 
-        snap.forEach(s => {
-          const msg = s.val();
-          if (!appState.messages.has(s.key)) {
-            newMessages.push({ key: s.key, msg });
-            if (msg.time < minTime) minTime = msg.time;
-            messageCount++;
-          }
-        });
-        newMessages.sort((a, b) => a.msg.time - b.msg.time);
-        const fragment = document.createDocumentFragment();
-        newMessages.forEach(item => {
-          appState.messages.set(item.key, item.msg);
-          const el = createMessageElement(item.key, item.msg);
-          fragment.appendChild(el);
-        });
-        elements.messagesBox.insertBefore(fragment, elements.messagesBox.firstChild);
-        appState.oldestMessageTime = minTime;
-        appState.hasMoreOldMessages = messageCount === 30;
-        const newScrollHeight = elements.messagesBox.scrollHeight;
-        elements.messagesBox.style.scrollBehavior = 'auto';
-        elements.messagesBox.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
-        elements.messagesBox.style.scrollBehavior = '';
-
-        if (appState.selectMode) {
-          elements.messagesBox.querySelectorAll('.chat-message').forEach(el => {
-            if (el.classList.contains('select-mode')) return;
-            const key = el.dataset.msgId;
-            const msg = appState.messages.get(key);
-            if (!msg) return;
-            const canSelect = msg.uid === appState.currentUser.uid || appState.admins.has(appState.currentUser.uid);
-            if (!canSelect) return;
-            el.classList.add('select-mode');
-            const cb = document.createElement('div');
-            cb.className = 'select-checkbox' + (appState.selectedMessages.has(key) ? ' checked' : '');
-            cb.dataset.msgKey = key;
-            el.insertBefore(cb, el.firstChild);
+          snap.forEach(s => {
+            const msg = s.val();
+            if (!appState.messages.has(s.key)) {
+              newMessages.push({ key: s.key, msg });
+              if (msg.time < minTime) minTime = msg.time;
+              messageCount++;
+            }
           });
+          newMessages.sort((a, b) => a.msg.time - b.msg.time);
+          const fragment = document.createDocumentFragment();
+          newMessages.forEach(item => {
+            appState.messages.set(item.key, item.msg);
+            const el = createMessageElement(item.key, item.msg);
+            fragment.appendChild(el);
+          });
+          elements.messagesBox.insertBefore(fragment, elements.messagesBox.firstChild);
+          appState.oldestMessageTime = minTime;
+          appState.hasMoreOldMessages = snap.size === 30;
+          const newScrollHeight = elements.messagesBox.scrollHeight;
+          elements.messagesBox.style.scrollBehavior = 'auto';
+          elements.messagesBox.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+          elements.messagesBox.style.scrollBehavior = '';
+
+          if (appState.selectMode) {
+            elements.messagesBox.querySelectorAll('.chat-message').forEach(el => {
+              if (el.classList.contains('select-mode')) return;
+              const key = el.dataset.msgId;
+              const msg = appState.messages.get(key);
+              if (!msg) return;
+              const canSelect = msg.uid === appState.currentUser.uid || appState.admins.has(appState.currentUser.uid);
+              if (!canSelect) return;
+              el.classList.add('select-mode');
+              const cb = document.createElement('div');
+              cb.className = 'select-checkbox' + (appState.selectedMessages.has(key) ? ' checked' : '');
+              cb.dataset.msgKey = key;
+              el.insertBefore(cb, el.firstChild);
+            });
+          }
+        } else {
+          appState.hasMoreOldMessages = false;
         }
-      } else {
-        appState.hasMoreOldMessages = false;
+      } catch (e) {
+      } finally {
+        appState.isLoadingMore = false;
       }
-      appState.isLoadingMore = false;
     }
 
 
@@ -613,7 +618,7 @@
       const authorName = authorUser?.nickname || msg.nickname || '...';
       const bubbleAvatarHtml = avatarHtml(authorUser, 'bubble-avatar', 'bubble-avatar-default', false, false);
       wrap.innerHTML = `
-        <div class="bubble">
+        <div class="bubble ${msg.type === 'gif' ? 'gif-bubble' : ''}">
             <div class="bubble-head">
                 ${bubbleAvatarHtml}
                 <div class="bubble-name" data-uid="${msg.uid}">${authorName}</div>
