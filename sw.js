@@ -1,4 +1,4 @@
-const CACHE_NAME = 'simple-chat-v21';
+const CACHE_NAME = 'simple-chat-v22';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -39,6 +39,10 @@ self.addEventListener('fetch', event => {
   }
 
   if (event.request.url.includes('.firebaseio.com')) {
+    return;
+  }
+
+  if (!event.request.url.startsWith('http')) {
     return;
   }
 
