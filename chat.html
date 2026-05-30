@@ -429,7 +429,9 @@
         if (!pending) {
           pending = true;
           requestAnimationFrame(() => {
-            container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
+            if (!appState.isInitialising) {
+              container.scrollTo({ top: container.scrollHeight, behavior: 'instant' });
+            }
             pending = false;
           });
         }
@@ -468,6 +470,7 @@
         scrollToBottomAfterImages(elements.messagesBox, true);
         setTimeout(() => {
           appState.isInitialising = false;
+          elements.messagesBox.scrollTo({ top: elements.messagesBox.scrollHeight, behavior: 'instant' });
         }, 1500);
       }
     }
