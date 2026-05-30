@@ -1396,6 +1396,9 @@
         cb.dataset.msgKey = key;
         el.insertBefore(cb, el.firstChild);
       });
+      requestAnimationFrame(() => {
+        elements.messagesBox.scrollTo({ top: elements.messagesBox.scrollHeight, behavior: 'instant' });
+      });
     }
 
     function exitSelectMode() {
@@ -1404,6 +1407,9 @@
       elements.selectBar.classList.add('hidden');
       document.querySelectorAll('.select-checkbox').forEach(el => el.remove());
       document.querySelectorAll('.chat-message.select-mode').forEach(el => el.classList.remove('select-mode'));
+      requestAnimationFrame(() => {
+        elements.messagesBox.scrollTo({ top: elements.messagesBox.scrollHeight, behavior: 'instant' });
+      });
     }
 
     function toggleSelect(key) {
