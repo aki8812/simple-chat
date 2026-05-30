@@ -620,7 +620,7 @@
                 ${deleteBtnHtml}
             </div>
             ${msg.type === 'gif' 
-              ? `<img class="chat-gif" src="${msg.url}" alt="GIF">`
+              ? `<img class="chat-gif" src="${msg.url ? msg.url.replace('mediumgif', 'tinygif') : ''}" loading="lazy" alt="GIF">`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
@@ -1783,7 +1783,7 @@
           img.src = item.preview;
           img.loading = 'lazy';
           img.onclick = () => {
-            window.sendGifMessage(item.full);
+            window.sendGifMessage(item.preview);
             let saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
             saved = saved.map(s => typeof s === 'string' ? { preview: s, full: s } : s);
             saved = [item, ...saved.filter(s => s.preview !== item.preview)].slice(0, 20);
