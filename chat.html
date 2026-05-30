@@ -52,9 +52,14 @@
             <button id="resendVerify" class="linklike">重新寄送驗證信</button>
           </div>
           <div id="banBanner" class="banner hidden">你已被管理員封鎖，無法發話。</div>
-          <div id="notificationBanner" class="banner hidden" style="background:#5865f2;border-left:4px solid #fff;">
-            開啟系統通知以接收新訊息提醒 -> 
-            <button id="enableNotifications" class="linklike" style="color:#fff;font-weight:bold;text-decoration:underline;">開啟通知</button>
+          <div id="notificationBanner" class="banner hidden" style="background:#5865f2;border-left:4px solid #fff;padding:4px 8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:8px;">
+              <div>
+                開啟系統通知以接收新訊息提醒 -> 
+                <button id="enableNotifications" class="linklike" style="color:#fff;font-weight:bold;text-decoration:underline;">開啟通知</button>
+              </div>
+              <button id="closeNotificationBanner">✕</button>
+            </div>
           </div>
         </div>
       </header>
@@ -344,7 +349,8 @@
       elements.verifyBanner.classList.toggle('hidden', isVerified);
       elements.banBanner.classList.toggle('hidden', !isBanned);
       if (elements.notificationBanner) {
-        const showNotifBanner = isVerified && !isBanned && ('Notification' in window) && (Notification.permission === 'default');
+        const isDismissed = localStorage.getItem('dismissNotificationBanner') === 'true';
+        const showNotifBanner = isVerified && !isBanned && ('Notification' in window) && (Notification.permission === 'default') && !isDismissed;
         elements.notificationBanner.classList.toggle('hidden', !showNotifBanner);
       }
       elements.adminPanel.classList.toggle('hidden', !isAdmin);
@@ -628,6 +634,13 @@
           } catch (e) {
             showModal({ title: '提示', content: '此裝置不支援通知功能。' });
           }
+          updateAndRenderUI();
+        };
+      }
+      const closeNotifBtn = document.getElementById('closeNotificationBanner');
+      if (closeNotifBtn) {
+        closeNotifBtn.onclick = () => {
+          localStorage.setItem('dismissNotificationBanner', 'true');
           updateAndRenderUI();
         };
       }
@@ -1449,6 +1462,29 @@
       }
     }
     function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
+
+    async function checkEmailVerifiedStatus() {
+      if (auth.currentUser && !auth.currentUser.emailVerified) {
+        try {
+          await reload(auth.currentUser);
+          appState.currentUser = auth.currentUser;
+          updateAndRenderUI();
+        } catch (e) {
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        checkEmailVerifiedStatus();
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      checkEmailVerifiedStatus();
+    });
+
+    setInterval(checkEmailVerifiedStatus, 3000);
   </script>
   <script>
     window.addEventListener('pagehide', () => {
