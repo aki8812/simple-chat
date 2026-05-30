@@ -665,6 +665,7 @@ body {
   min-width: 0;
   height: 100%;
   transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
 }
 
 .topbar {
@@ -1636,4 +1637,55 @@ button.danger:hover {
 
 #closeNotificationBanner:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.unread-banner {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--brand);
+  color: var(--text);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.25s ease, transform 0.25s ease, background-color 0.2s ease;
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+
+.unread-banner:hover {
+  background: #4752c4;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.unread-banner.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(10px);
+}
+
+.unread-arrow {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: bounce 1.5s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
 }
