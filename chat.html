@@ -70,12 +70,13 @@
           <button id="selectCancelBtn">取消</button>
         </div>
       </div>
-      <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息">
+      <div style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
+        <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
         <div class="chat-loading-placeholder" id="chatLoadingPlaceholder">
           <div class="chat-loading-spinner"></div>
           <span>連線並載入訊息中...</span>
         </div>
-      </section>
+      </div>
       <div id="unreadBanner" class="unread-banner hidden">
         <span id="unreadCountText">有 1 則新訊息</span>
         <svg class="unread-arrow" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg>
@@ -444,6 +445,7 @@
         container.scrollTo({ top: target, behavior: 'smooth' });
       } else {
         container.scrollTo({ top: target, behavior: 'instant' });
+        return;
       }
 
       const images = container.querySelectorAll('img');
@@ -508,6 +510,10 @@
         scrollToBottomAfterImages(elements.messagesBox, false);
         setTimeout(() => {
           appState.isInitialising = false;
+          const loader = document.getElementById('chatLoadingPlaceholder');
+          if (loader) {
+            loader.classList.add('hidden');
+          }
         }, 800);
       }
     }
