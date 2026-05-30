@@ -412,11 +412,11 @@
     function scrollToBottomAfterImages(container, smooth = false) {
       const target = container.scrollHeight;
       if (smooth) {
-        const startPos = target - container.clientHeight - 400;
+        const startPos = target - container.clientHeight - 800;
         container.scrollTop = startPos > 0 ? startPos : 0;
         setTimeout(() => {
           container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-        }, 120);
+        }, 150);
       } else {
         container.scrollTo({ top: target, behavior: 'instant' });
       }
@@ -468,7 +468,7 @@
         scrollToBottomAfterImages(elements.messagesBox, true);
         setTimeout(() => {
           appState.isInitialising = false;
-        }, 1000);
+        }, 1500);
       }
     }
 
