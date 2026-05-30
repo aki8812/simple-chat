@@ -407,10 +407,10 @@ body {
 
 .profile-modal-nick {
   font-weight: 700;
-  font-size: 18px;
+  font-size: 22px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .profile-modal-nick-text {
@@ -421,13 +421,13 @@ body {
 
 .profile-modal-actions-inline {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 .profile-modal-actions-inline button {
-  padding: 4px 8px;
-  font-size: 12px;
-  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  border-radius: 6px;
 }
 
 .profile-modal-body-wrapper {
