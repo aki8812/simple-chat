@@ -618,14 +618,14 @@
       const authorName = authorUser?.nickname || msg.nickname || '...';
       const bubbleAvatarHtml = avatarHtml(authorUser, 'bubble-avatar', 'bubble-avatar-default', false, false);
       wrap.innerHTML = `
-        <div class="bubble ${msg.type === 'gif' ? 'gif-bubble' : ''}">
+        <div class="bubble">
             <div class="bubble-head">
                 ${bubbleAvatarHtml}
                 <div class="bubble-name" data-uid="${msg.uid}">${authorName}</div>
                 ${deleteBtnHtml}
             </div>
             ${msg.type === 'gif' 
-              ? `<img class="chat-gif" src="${msg.url ? msg.url.replace('mediumgif', 'tinygif') : ''}" ${msg.width && msg.height ? `style="aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;"` : `style="aspect-ratio:16/9;width:300px;max-width:100%;object-fit:contain;height:auto;"`} loading="lazy" alt="GIF">`
+              ? `<img class="chat-gif" src="${msg.url ? msg.url.replace('mediumgif', 'tinygif') : ''}" ${msg.width && msg.height ? `style="aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;"` : `style="max-height:250px;width:auto;max-width:100%;height:auto;"`} loading="lazy" alt="GIF">`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;

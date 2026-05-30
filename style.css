@@ -793,29 +793,10 @@ button.danger:hover {
   border-right-color: var(--brand2);
 }
 
-.bubble.gif-bubble {
-  background: transparent;
-  padding: 0;
-  box-shadow: none;
-  max-width: 100%;
-  width: fit-content;
-}
-
-.bubble.gif-bubble::after {
-  display: none;
-}
-
-.bubble.gif-bubble .bubble-head {
-  margin-bottom: 4px;
-}
-
-.bubble.gif-bubble .bubble-time {
-  margin-top: 4px;
-  text-align: left;
-}
-
-.chat-message.self .bubble.gif-bubble .bubble-time {
-  text-align: right;
+.chat-gif {
+  display: block;
+  border-radius: 8px;
+  margin-top: 6px;
 }
 
 .bubble-head {
