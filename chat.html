@@ -504,12 +504,14 @@
 
       if (isInitial) {
         scrollToBottomAfterImages(elements.messagesBox, false);
-        setTimeout(() => {
+        if (appState.initTimer) clearTimeout(appState.initTimer);
+        appState.initTimer = setTimeout(() => {
           appState.isInitialising = false;
           const loader = document.getElementById('chatLoadingPlaceholder');
           if (loader) {
             loader.classList.add('hidden');
           }
+          scrollToBottomAfterImages(elements.messagesBox, false);
         }, 800);
       }
     }
@@ -620,7 +622,7 @@
                 ${deleteBtnHtml}
             </div>
             ${msg.type === 'gif' 
-              ? `<img class="chat-gif" src="${msg.url ? msg.url.replace('mediumgif', 'tinygif') : ''}" ${msg.width && msg.height ? `style="aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;"` : `style="max-height:250px;width:auto;max-width:100%;height:auto;"`} loading="lazy" alt="GIF">`
+              ? `<img class="chat-gif" src="${msg.url || ''}" ${msg.width && msg.height ? `style="aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;"` : `style="max-height:250px;width:auto;max-width:100%;height:auto;"`} loading="lazy" alt="GIF">`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
@@ -1784,7 +1786,7 @@
           img.src = item.preview;
           img.loading = 'lazy';
           img.onclick = () => {
-            window.sendGifMessage(item.preview, item.width, item.height);
+            window.sendGifMessage(item.full, item.width, item.height);
             let saved = JSON.parse(localStorage.getItem('frequentGifs') || '[]');
             saved = saved.map(s => typeof s === 'string' ? { preview: s, full: s } : s);
             saved = [item, ...saved.filter(s => s.preview !== item.preview)].slice(0, 20);
