@@ -70,7 +70,12 @@
           <button id="selectCancelBtn">取消</button>
         </div>
       </div>
-      <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息"></section>
+      <section id="messages" class="chat-box" aria-live="polite" aria-label="聊天訊息">
+        <div class="chat-loading-placeholder" id="chatLoadingPlaceholder">
+          <div class="chat-loading-spinner"></div>
+          <span>連線並載入訊息中...</span>
+        </div>
+      </section>
       <div id="unreadBanner" class="unread-banner hidden">
         <span id="unreadCountText">有 1 則新訊息</span>
         <svg class="unread-arrow" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg>
@@ -181,6 +186,7 @@
       statuses: new Map(),
       isDeletingAccount: false,
       unreadCount: 0,
+      isOffline: false,
     };
 
     function saveMentionHistory(nickname) {
@@ -234,31 +240,53 @@
 
     async function initializeApp() {
       try {
+        const cachedMsgs = localStorage.getItem('cachedMessages');
+        if (cachedMsgs) {
+          appState.messages = new Map(JSON.parse(cachedMsgs));
+        }
+        const cachedUsers = localStorage.getItem('cachedUsers');
+        if (cachedUsers) {
+          appState.users = new Map(JSON.parse(cachedUsers));
+        }
+        if (appState.messages.size > 0) {
+          renderAllMessages(true);
+        }
+      } catch (e) {}
+
+      try {
         const [usersSnap, adminsSnap, bansSnap] = await Promise.all([
           get(ref(db, 'users')),
           get(ref(db, 'admins')),
           get(ref(db, 'bans')),
         ]);
 
+        appState.users.clear();
         usersSnap.forEach(u => {
           const p = u.val()?.profile;
           if (p) appState.users.set(u.key, { uid: u.key, ...p });
         });
+        saveUsersToLocalCache();
+
         adminsSnap.forEach(ch => { if (ch.val() === true) appState.admins.add(ch.key); });
         bansSnap.forEach(ch => { if (ch.val() === true) appState.bans.add(ch.key); });
 
         await loadInitialMessages();
-        if (!appState.users.has(appState.currentUser.uid)) {
+        if (appState.currentUser && !appState.users.has(appState.currentUser.uid)) {
           await signOut(auth);
           return;
         }
+        appState.isOffline = false;
         updateAndRenderUI(true);
         attachRealtimeListeners();
         setupEventListeners();
         setupPresence(appState.currentUser.uid);
 
       } catch (error) {
-        showModal({ title: '錯誤', content: '無法載入聊天室資料，請稍後重試。' });
+        appState.isOffline = true;
+        updateAndRenderUI(true);
+        window.addEventListener('online', () => {
+          location.reload();
+        });
       }
     }
 
@@ -269,6 +297,7 @@
           const p = u.val()?.profile;
           if (p) appState.users.set(u.key, { uid: u.key, ...p });
         });
+        saveUsersToLocalCache();
         if (!appState.isDeletingAccount && !appState.isInitialising && appState.currentUser && !appState.users.has(appState.currentUser.uid)) {
           signOut(auth);
           return;
@@ -359,7 +388,7 @@
     }
 
     function renderControls() {
-      const { currentUser, admins, bans, users } = appState;
+      const { currentUser, admins, bans, users, isOffline } = appState;
       const myProfile = users.get(currentUser.uid);
       const isVerified = !!currentUser.emailVerified;
       const isBanned = bans.has(currentUser.uid);
@@ -376,12 +405,12 @@
       elements.adminPanel.classList.toggle('hidden', !isAdmin);
       elements.sidebarProfile.classList.toggle('hidden', isAdmin);
 
-      const isDisabled = !isVerified || isBanned || !hasNick;
+      const isDisabled = !isVerified || isBanned || !hasNick || isOffline;
       elements.inputEl.contentEditable = !isDisabled;
       elements.sendBtn.disabled = isDisabled;
       document.getElementById('emojiBtn').disabled = isDisabled;
       const placeholder = isDisabled
-        ? (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱'))
+        ? (isOffline ? '網路連線中斷，目前處於離線模式' : (isBanned ? '您已被管理員封鎖' : (!isVerified ? '請先驗證 Email' : '請先設定暱稱')))
         : '輸入訊息...';
       elements.inputEl.setAttribute('data-placeholder', placeholder);
 
@@ -456,9 +485,24 @@
       }
     }
 
+    function saveMessagesToLocalCache() {
+      try {
+        const msgsArray = Array.from(appState.messages.entries());
+        localStorage.setItem('cachedMessages', JSON.stringify(msgsArray));
+      } catch (e) {}
+    }
+
+    function saveUsersToLocalCache() {
+      try {
+        const usersArray = Array.from(appState.users.entries());
+        localStorage.setItem('cachedUsers', JSON.stringify(usersArray));
+      } catch (e) {}
+    }
+
     function renderAllMessages(isInitial = false) {
       const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
       elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
+      saveMessagesToLocalCache();
 
       if (isInitial) {
         scrollToBottomAfterImages(elements.messagesBox, false);
@@ -1561,6 +1605,13 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js');
+      });
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
       });
     }
     const EMOJIS = [

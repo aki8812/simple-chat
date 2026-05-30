@@ -1,4 +1,4 @@
-const CACHE_NAME = 'simple-chat-v10';
+const CACHE_NAME = 'simple-chat-v11';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -43,18 +43,20 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
-        }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME)
-          .then(cache => {
-            cache.put(event.request, responseToCache);
-          });
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(event.request).then(cachedResponse => {
+      const fetchPromise = fetch(event.request)
+        .then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {});
+
+      return cachedResponse || fetchPromise;
+    })
   );
 });
