@@ -322,6 +322,7 @@
                 await remove(ref(db, `users/${uid}`));
                 await remove(ref(db, `admins/${uid}`));
                 await remove(ref(db, `bans/${uid}`));
+                await remove(ref(db, `status/${uid}`));
                 const msgsSnap = await get(query(ref(db, 'messages'), orderByChild('uid')));
                 const deletes = [];
                 msgsSnap.forEach(s => { if (s.val().uid === uid) deletes.push(remove(ref(db, `messages/${s.key}`))); });

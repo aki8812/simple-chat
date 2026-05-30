@@ -542,6 +542,10 @@
     async function sendMessage() {
       const text = elements.inputEl.innerText.trim();
       if (!text) return;
+      if (text.length > 2000) {
+        showModal({ title: '提示', content: `訊息超出字數限制（${text.length} / 2000 字），請縮短後再傳送。` });
+        return;
+      }
       const myProfile = appState.users.get(appState.currentUser.uid);
       try {
         const mentionRegex = /@([\p{L}\p{N}_-]{3,24})/gu;
@@ -933,6 +937,7 @@
         await remove(ref(db, `users/${uid}`));
         await remove(ref(db, `admins/${uid}`));
         await remove(ref(db, `bans/${uid}`));
+        await remove(ref(db, `status/${uid}`));
         const msgsSnap = await get(query(ref(db, 'messages'), orderByChild('uid')));
         const deletes = [];
         msgsSnap.forEach(s => { if (s.val().uid === uid) deletes.push(remove(ref(db, `messages/${s.key}`))); });
@@ -1151,10 +1156,21 @@
           await remove(ref(db, `users/${uid}`));
           await remove(ref(db, `admins/${uid}`));
           await remove(ref(db, `bans/${uid}`));
+          await remove(ref(db, `status/${uid}`));
+          const msgsSnap = await get(query(ref(db, 'messages'), orderByChild('uid')));
+          const deletes = [];
+          msgsSnap.forEach(s => { if (s.val().uid === uid) deletes.push(remove(ref(db, `messages/${s.key}`))); });
+          await Promise.all(deletes);
           try { await deleteObject(storageRef(storage, `avatars/${uid}`)); } catch { }
           await deleteUser(currentUser);
           window.location.href = 'login.html';
-        } catch { showModal({ title: '錯誤', content: '刪除失敗，請重新登入後再試' }); }
+        } catch (e) {
+          if (e.code === 'auth/requires-recent-login') {
+            showModal({ title: '需要重新登入', content: '為了安全起見，刪除帳號需要近期登入。請先登出後重新登入，再執行刪除操作。' });
+          } else {
+            showModal({ title: '錯誤', content: '刪除失敗：' + e.message });
+          }
+        }
       };
       document.getElementById('profileSave').onclick = async () => {
         const profile = appState.users.get(appState.currentUser.uid);
