@@ -281,6 +281,7 @@
         attachRealtimeListeners();
         setupEventListeners();
         setupPresence(appState.currentUser.uid);
+        setupGifObserver();
 
       } catch (error) {
         appState.isOffline = true;
@@ -336,6 +337,7 @@
         const isAtBottom = elements.messagesBox.scrollHeight - elements.messagesBox.scrollTop - elements.messagesBox.clientHeight < 100;
         const el = createMessageElement(snap.key, msg);
         elements.messagesBox.appendChild(el);
+        observeNewGifs(elements.messagesBox);
         if (msg.uid === appState.currentUser.uid || isAtBottom || appState.isInitialising) {
           scrollToBottomAfterImages(elements.messagesBox, !appState.isInitialising);
           hideUnreadBanner();
@@ -492,6 +494,40 @@
       }
     }
 
+    let gifObserver = null;
+    function setupGifObserver() {
+      if (gifObserver) return;
+      gifObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const img = entry.target.querySelector('img[data-src]');
+          if (!img) return;
+          if (entry.isIntersecting) {
+            if (!img.src || img.src === location.href) {
+              img.src = img.dataset.src;
+            }
+          } else {
+            if (img.src && img.src !== location.href) {
+              img.src = '';
+              img.style.opacity = '0';
+              const spinner = img.previousElementSibling;
+              if (spinner) spinner.style.display = '';
+            }
+          }
+        });
+      }, { root: elements.messagesBox, rootMargin: '800px 0px' });
+      elements.messagesBox.querySelectorAll('.chat-gif').forEach(el => gifObserver.observe(el));
+    }
+
+    function observeNewGifs(container) {
+      if (!gifObserver) return;
+      container.querySelectorAll('.chat-gif').forEach(el => {
+        if (!el._gifObserved) {
+          el._gifObserved = true;
+          gifObserver.observe(el);
+        }
+      });
+    }
+
     function showUnreadBanner() {
       appState.unreadCount++;
       const textEl = document.getElementById('unreadCountText');
@@ -529,6 +565,7 @@
     function renderAllMessages(isInitial = false) {
       const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
       elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
+      observeNewGifs(elements.messagesBox);
       saveMessagesToLocalCache();
 
       if (isInitial) {
@@ -599,6 +636,7 @@
             fragment.appendChild(el);
           });
           elements.messagesBox.insertBefore(fragment, elements.messagesBox.firstChild);
+          observeNewGifs(elements.messagesBox);
           appState.oldestMessageTime = minTime;
           appState.hasMoreOldMessages = snap.size === 30;
           const newScrollHeight = elements.messagesBox.scrollHeight;
@@ -653,7 +691,7 @@
             ${msg.type === 'gif' 
               ? `<div class="chat-gif" style="position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;${msg.width && msg.height ? `aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;` : `aspect-ratio:1/1;min-height:200px;max-height:250px;max-width:100%;width:auto;`}">
                    <div class="chat-loading-spinner" style="position:absolute;z-index:0;"></div>
-                   <img src="${msg.url || ''}" style="width:100%;height:100%;object-fit:cover;position:relative;z-index:1;opacity:0;transition:opacity 0.2s;" loading="lazy" alt="GIF" onload="this.style.opacity='1';if(this.previousElementSibling)this.previousElementSibling.style.display='none';">
+                   <img data-src="${msg.url || ''}" style="width:100%;height:100%;object-fit:cover;position:relative;z-index:1;opacity:0;transition:opacity 0.2s;" alt="GIF" onload="this.style.opacity='1';if(this.previousElementSibling)this.previousElementSibling.style.display='none';">
                  </div>`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
