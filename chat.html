@@ -232,11 +232,15 @@
       });
     }
 
-    onAuthStateChanged(auth, async (user) => {
+    let isAppInitialized = false;
+    let myConnectionRef = null;
+    onAuthStateChanged(auth, (user) => {
       if (!user) return window.location.href = 'login.html';
-      try { await reload(user); } catch { }
+      if (isAppInitialized) return;
+      isAppInitialized = true;
       appState.currentUser = user;
-      await initializeApp();
+      initializeApp();
+      reload(user).catch(() => {});
     });
 
     async function initializeApp() {
@@ -250,7 +254,7 @@
           appState.users = new Map(JSON.parse(cachedUsers));
         }
         if (appState.messages.size > 0) {
-          renderAllMessages(true);
+          renderAllMessages(true, true);
         }
       } catch (e) {}
 
@@ -277,7 +281,8 @@
           return;
         }
         appState.isOffline = false;
-        updateAndRenderUI(true);
+        const hasCache = appState.messages.size > 0;
+        updateAndRenderUI(!hasCache);
         attachRealtimeListeners();
         setupEventListeners();
         setupPresence(appState.currentUser.uid);
@@ -285,7 +290,8 @@
 
       } catch (error) {
         appState.isOffline = true;
-        updateAndRenderUI(true);
+        const hasCache = appState.messages.size > 0;
+        updateAndRenderUI(!hasCache);
         window.addEventListener('online', () => {
           location.reload();
         });
@@ -375,9 +381,10 @@
         const s = appState.statuses.get(uid);
         const myProfile = appState.users.get(uid);
         const currentMode = myProfile?.statusMode || s?.mode || 'online';
+        const hasConnections = s?.connections && Object.keys(s.connections).length > 0;
         const isOnline = (uid === appState.currentUser?.uid)
           ? (currentMode !== 'invisible')
-          : (s?.state === 'online');
+          : (hasConnections && currentMode !== 'invisible');
         if (isOnline) {
           statusDotHtml = `<span class="status-dot ${currentMode === 'dnd' ? 'dnd' : 'online'}"></span>`;
         } else {
@@ -562,7 +569,7 @@
       } catch (e) {}
     }
 
-    function renderAllMessages(isInitial = false) {
+    function renderAllMessages(isInitial = false, fastHide = false) {
       const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
       elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
       observeNewGifs(elements.messagesBox);
@@ -571,6 +578,7 @@
       if (isInitial) {
         scrollToBottomAfterImages(elements.messagesBox, false);
         if (appState.initTimer) clearTimeout(appState.initTimer);
+        const delay = fastHide ? 100 : 800;
         appState.initTimer = setTimeout(() => {
           appState.isInitialising = false;
           const loader = document.getElementById('chatLoadingPlaceholder');
@@ -578,7 +586,7 @@
             loader.classList.add('hidden');
           }
           scrollToBottomAfterImages(elements.messagesBox, false);
-        }, 800);
+        }, delay);
       }
     }
 
@@ -774,7 +782,14 @@
       elements.inputEl.oninput = handleInput;
       elements.logoutBtn.onclick = async () => {
         const ok = await showModal({ title: '確認', content: '確定要登出嗎？', showCancel: true });
-        if (ok) signOut(auth);
+        if (ok) {
+          if (myConnectionRef) {
+            try {
+              await remove(myConnectionRef);
+            } catch (e) {}
+          }
+          signOut(auth);
+        }
       };
       elements.saveNickBtn.onclick = changeNickname;
       elements.brandBtn.onclick = () => location.reload();
@@ -1341,8 +1356,11 @@
       document.getElementById('profileLogout').onclick = async () => {
         const ok = await showModal({ title: '確認', content: '確定要登出嗎？', showCancel: true });
         if (ok) {
-          const uid = currentUser.uid;
-          await set(ref(db, `status/${uid}`), { state: 'offline', mode: 'offline', lastChanged: serverTimestamp() });
+          if (myConnectionRef) {
+            try {
+              await remove(myConnectionRef);
+            } catch (e) {}
+          }
           signOut(auth);
         }
       };
@@ -1596,21 +1614,12 @@
         if (snap.val() === false) return;
         const profileSnap = await get(ref(db, `users/${uid}/profile/statusMode`));
         const mode = profileSnap.val() || 'online';
-        let dbState = 'online';
-        let dbMode = mode;
-        if (mode === 'invisible') {
-          dbState = 'offline';
-          dbMode = 'offline';
-        }
-        const myDisconnect = onDisconnect(statusRef);
-        myDisconnect.set({
-          state: 'offline',
-          mode: 'offline',
-          lastChanged: serverTimestamp()
-        }).then(() => {
-          set(statusRef, {
-            state: dbState,
-            mode: dbMode,
+        myConnectionRef = push(ref(db, `status/${uid}/connections`));
+        const myDisconnect = onDisconnect(myConnectionRef);
+        myDisconnect.remove().then(() => {
+          set(myConnectionRef, true);
+          update(statusRef, {
+            mode: mode,
             lastChanged: serverTimestamp()
           });
         });
@@ -1620,15 +1629,8 @@
     function setUserStatusMode(mode) {
       const uid = appState.currentUser.uid;
       const statusRef = ref(db, `status/${uid}`);
-      let dbState = 'online';
-      let dbMode = mode;
-      if (mode === 'invisible') {
-        dbState = 'offline';
-        dbMode = 'offline';
-      }
-      set(statusRef, {
-        state: dbState,
-        mode: dbMode,
+      update(statusRef, {
+        mode: mode,
         lastChanged: serverTimestamp()
       });
     }
@@ -1716,9 +1718,7 @@
     setInterval(checkEmailVerifiedStatus, 3000);
   </script>
   <script>
-    window.addEventListener('pagehide', () => {
-      if (window.db) window.goOffline(window.db);
-    });
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js');
