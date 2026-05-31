@@ -1158,6 +1158,10 @@
                   <span>收到訊息音效</span>
                   <input type="checkbox" id="settingSoundNotif" class="toggle-switch">
                 </label>
+                <label class="setting-item">
+                  <span>連結是否詢問開啟</span>
+                  <input type="checkbox" id="settingAskLink" class="toggle-switch">
+                </label>
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);padding:10px 12px;border-radius:6px;margin-top:8px;">
                 <span id="modalNotificationStatus" style="font-size:13px;color:var(--text);"></span>
@@ -1216,11 +1220,14 @@
       const notifPrefs = JSON.parse(localStorage.getItem('notificationPrefs') || '{"push":true,"sound":true}');
       const pushToggle = document.getElementById('settingPushNotif');
       const soundToggle = document.getElementById('settingSoundNotif');
+      const askLinkToggle = document.getElementById('settingAskLink');
       pushToggle.checked = notifPrefs.push;
       soundToggle.checked = notifPrefs.sound;
+      askLinkToggle.checked = localStorage.getItem('skipLinkAsk') !== 'true';
       const savePrefs = () => localStorage.setItem('notificationPrefs', JSON.stringify({ push: pushToggle.checked, sound: soundToggle.checked }));
       pushToggle.onchange = savePrefs;
       soundToggle.onchange = savePrefs;
+      askLinkToggle.onchange = () => localStorage.setItem('skipLinkAsk', askLinkToggle.checked ? 'false' : 'true');
 
       const notifStatus = document.getElementById('modalNotificationStatus');
       const notifBtn = document.getElementById('modalNotificationBtn');
