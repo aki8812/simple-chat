@@ -651,7 +651,10 @@
                 ${deleteBtnHtml}
             </div>
             ${msg.type === 'gif' 
-              ? `<img class="chat-gif" src="${msg.url || ''}" ${msg.width && msg.height ? `style="aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;"` : `style="aspect-ratio:1/1;min-height:200px;max-height:250px;object-fit:cover;max-width:100%;width:auto;"`} loading="lazy" alt="GIF">`
+              ? `<div class="chat-gif" style="position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;${msg.width && msg.height ? `aspect-ratio:${msg.width}/${msg.height};width:${msg.width}px;max-width:100%;height:auto;` : `aspect-ratio:1/1;min-height:200px;max-height:250px;max-width:100%;width:auto;`}">
+                   <div class="chat-loading-spinner" style="position:absolute;z-index:0;"></div>
+                   <img src="${msg.url || ''}" style="width:100%;height:100%;object-fit:cover;position:relative;z-index:1;opacity:0;transition:opacity 0.2s;" loading="lazy" alt="GIF" onload="this.style.opacity='1';if(this.previousElementSibling)this.previousElementSibling.style.display='none';">
+                 </div>`
               : `<div class="bubble-text">${renderWithMentions(msg.text)}</div>`}
             <div class="bubble-time">${fmt(new Date(msg.time))}</div>
         </div>`;
@@ -1351,8 +1354,17 @@
       };
       document.getElementById('profileClose').onclick = async () => {
         if (appState.profileDirty) {
-          const ok = await showModal({ title: '確認', content: '有未儲存的變更，確定要關閉嗎？', showCancel: true });
-          if (!ok) return;
+          const ok = await showModal({ 
+            title: '確認', 
+            content: '您有未儲存的設定，請問要儲存嗎？', 
+            confirmText: '儲存', 
+            cancelText: '取消', 
+            showCancel: true 
+          });
+          if (ok) {
+            document.getElementById('profileSave').click();
+            return;
+          }
         }
         appState.pendingAvatarBlob = null;
         appState.profileDirty = false;
