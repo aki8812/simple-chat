@@ -343,6 +343,7 @@
         const isAtBottom = elements.messagesBox.scrollHeight - elements.messagesBox.scrollTop - elements.messagesBox.clientHeight < 100;
         const el = createMessageElement(snap.key, msg);
         elements.messagesBox.appendChild(el);
+        updateDateDividers();
         observeNewGifs(elements.messagesBox);
         if (msg.uid === appState.currentUser.uid || isAtBottom || appState.isInitialising) {
           scrollToBottomAfterImages(elements.messagesBox, !appState.isInitialising);
@@ -358,6 +359,7 @@
           appState.messages.delete(snap.key);
           const msgElement = elements.messagesBox.querySelector(`[data-msg-id="${snap.key}"]`);
           if (msgElement) msgElement.remove();
+          updateDateDividers();
           saveMessagesToLocalCache();
         }
       });
@@ -367,6 +369,60 @@
       renderControls();
       renderUserList();
       renderAllMessages(isInitial);
+    }
+
+    function updateDateDividers() {
+      const dividers = Array.from(elements.messagesBox.querySelectorAll('.date-divider'));
+      dividers.forEach(divider => {
+        const next = divider.nextElementSibling;
+        if (!next || !next.classList.contains('chat-message')) {
+          divider.remove();
+          return;
+        }
+        const msgKey = next.dataset.msgId;
+        const msg = appState.messages.get(msgKey);
+        if (!msg) {
+          divider.remove();
+          return;
+        }
+        const d = new Date(msg.time);
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (divider.dataset.date !== dateKey) {
+          divider.remove();
+        }
+      });
+
+      const messages = Array.from(elements.messagesBox.querySelectorAll('.chat-message'));
+      let lastDateKey = null;
+      
+      messages.forEach(msgEl => {
+        const key = msgEl.dataset.msgId;
+        const msg = appState.messages.get(key);
+        if (!msg) return;
+        
+        const d = new Date(msg.time);
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        
+        if (dateKey !== lastDateKey) {
+          const prev = msgEl.previousElementSibling;
+          if (!prev || !prev.classList.contains('date-divider') || prev.dataset.date !== dateKey) {
+            const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
+            const dateText = `${monthNames[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+            
+            const divider = document.createElement('div');
+            divider.className = 'date-divider';
+            divider.dataset.date = dateKey;
+            divider.innerHTML = `<span class="date-divider-line"></span><span class="date-divider-text">${dateText}</span><span class="date-divider-line"></span>`;
+            elements.messagesBox.insertBefore(divider, msgEl);
+          }
+          lastDateKey = dateKey;
+        } else {
+          const prev = msgEl.previousElementSibling;
+          if (prev && prev.classList.contains('date-divider')) {
+            prev.remove();
+          }
+        }
+      });
     }
 
     const DEFAULT_AVATAR_SVG = '<svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>';
@@ -572,6 +628,7 @@
     function renderAllMessages(isInitial = false, fastHide = false) {
       const sortedMessages = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
       elements.messagesBox.innerHTML = sortedMessages.map(([key, msg]) => createMessageElement(key, msg).outerHTML).join('');
+      updateDateDividers();
       observeNewGifs(elements.messagesBox);
       saveMessagesToLocalCache();
 
@@ -644,6 +701,7 @@
             fragment.appendChild(el);
           });
           elements.messagesBox.insertBefore(fragment, elements.messagesBox.firstChild);
+          updateDateDividers();
           observeNewGifs(elements.messagesBox);
           appState.oldestMessageTime = minTime;
           appState.hasMoreOldMessages = snap.size === 30;
