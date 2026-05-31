@@ -613,8 +613,9 @@
 
     function saveMessagesToLocalCache() {
       try {
-        const msgsArray = Array.from(appState.messages.entries());
-        localStorage.setItem('cachedMessages', JSON.stringify(msgsArray));
+        const sortedMsgs = Array.from(appState.messages.entries()).sort((a, b) => a[1].time - b[1].time);
+        const msgsToCache = sortedMsgs.slice(-50);
+        localStorage.setItem('cachedMessages', JSON.stringify(msgsToCache));
       } catch (e) {}
     }
 
@@ -652,16 +653,18 @@
       const initialSnap = await get(msgQuery);
 
       if (initialSnap.exists()) {
-        let maxTime = 0;
-        let minTime = Infinity;
-        let messageCount = 0;
         initialSnap.forEach(snap => {
           const msg = snap.val();
           appState.messages.set(snap.key, msg);
+        });
+        
+        let maxTime = 0;
+        let minTime = Infinity;
+        appState.messages.forEach(msg => {
           if (msg.time > maxTime) maxTime = msg.time;
           if (msg.time < minTime) minTime = msg.time;
-          messageCount++;
         });
+        
         appState.latestMessageTime = maxTime;
         appState.oldestMessageTime = minTime;
         appState.hasMoreOldMessages = initialSnap.size === 30;
@@ -1618,6 +1621,7 @@
         cb.className = 'select-checkbox' + (appState.selectedMessages.has(key) ? ' checked' : '');
         cb.dataset.msgKey = key;
         el.insertBefore(cb, el.firstChild);
+      });
     }
 
     function exitSelectMode() {
