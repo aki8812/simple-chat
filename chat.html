@@ -1265,10 +1265,17 @@
       pushToggle.checked = notifPrefs.push;
       soundToggle.checked = notifPrefs.sound;
       askLinkToggle.checked = localStorage.getItem('skipLinkAsk') !== 'true';
-      const savePrefs = () => localStorage.setItem('notificationPrefs', JSON.stringify({ push: pushToggle.checked, sound: soundToggle.checked }));
-      pushToggle.onchange = savePrefs;
-      soundToggle.onchange = savePrefs;
-      askLinkToggle.onchange = () => localStorage.setItem('skipLinkAsk', askLinkToggle.checked ? 'false' : 'true');
+      const initialPush = pushToggle.checked;
+      const initialSound = soundToggle.checked;
+      const initialAskLink = askLinkToggle.checked;
+      const checkSettingsDirty = () => {
+        if (pushToggle.checked !== initialPush || soundToggle.checked !== initialSound || askLinkToggle.checked !== initialAskLink) {
+          appState.profileDirty = true;
+        }
+      };
+      pushToggle.onchange = checkSettingsDirty;
+      soundToggle.onchange = checkSettingsDirty;
+      askLinkToggle.onchange = checkSettingsDirty;
 
       const notifStatus = document.getElementById('modalNotificationStatus');
       const notifBtn = document.getElementById('modalNotificationBtn');
@@ -1383,8 +1390,9 @@
         if (pendingStatus !== currentMode) {
           await update(ref(db, `users/${appState.currentUser.uid}/profile`), { statusMode: pendingStatus });
           setUserStatusMode(pendingStatus);
-          appState.profileDirty = false;
         }
+        localStorage.setItem('notificationPrefs', JSON.stringify({ push: pushToggle.checked, sound: soundToggle.checked }));
+        localStorage.setItem('skipLinkAsk', askLinkToggle.checked ? 'false' : 'true');
         appState.pendingAvatarBlob = null;
         appState.profileDirty = false;
         elements.modalOverlay.classList.add('hidden');
@@ -1395,8 +1403,8 @@
           const ok = await showModal({ 
             title: '確認', 
             content: '您有未儲存的設定，請問要儲存嗎？', 
-            confirmText: '儲存', 
-            cancelText: '取消', 
+            confirmText: '儲存並關閉', 
+            cancelText: '放棄變更', 
             showCancel: true 
           });
           if (ok) {
@@ -1625,9 +1633,23 @@
       });
     }
 
+    let _audioCtx = null;
+    function getAudioContext() {
+      if (!_audioCtx) {
+        _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (_audioCtx.state === 'suspended') {
+        _audioCtx.resume();
+      }
+      return _audioCtx;
+    }
+
+    document.addEventListener('touchstart', () => getAudioContext(), { once: true });
+    document.addEventListener('click', () => getAudioContext(), { once: true });
+
     function playNotificationSound() {
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = getAudioContext();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);

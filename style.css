@@ -1350,6 +1350,10 @@ button.danger:hover {
   .emoji-panel {
     width: 240px;
   }
+
+  .unread-banner {
+    bottom: 90px;
+  }
 }
 
 .chat-link {
