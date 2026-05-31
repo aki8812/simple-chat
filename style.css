@@ -1352,7 +1352,7 @@ button.danger:hover {
   }
 
   .unread-banner {
-    bottom: 90px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 }
 
