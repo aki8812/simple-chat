@@ -283,6 +283,7 @@
         appState.isOffline = false;
         const hasCache = appState.messages.size > 0;
         updateAndRenderUI(!hasCache);
+        scrollToBottomAfterImages(elements.messagesBox, false);
         attachRealtimeListeners();
         setupEventListeners();
         setupPresence(appState.currentUser.uid);
@@ -292,6 +293,7 @@
         appState.isOffline = true;
         const hasCache = appState.messages.size > 0;
         updateAndRenderUI(!hasCache);
+        scrollToBottomAfterImages(elements.messagesBox, false);
         window.addEventListener('online', () => {
           location.reload();
         });
