@@ -216,8 +216,8 @@
                 }
             }
             return `
-        <div class="member-row ${isAdmin ? 'admin' : ''} ${isBanned ? 'banned' : ''}" data-uid="${user.uid}" style="cursor: pointer;">
-          <div class="member-head">
+        <div class="member-row ${isAdmin ? 'admin' : ''} ${isBanned ? 'banned' : ''}" data-uid="${user.uid}">
+          <div class="member-head" style="cursor: pointer;">
             ${adminAvatarHtml(user)}
             <span class="name">${user.nickname || '（無暱稱）'}</span>
             ${isAdmin ? '<span class="tag-admin">[管理員]</span>' : ''}
