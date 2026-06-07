@@ -243,7 +243,7 @@
                 return;
             }
 
-            if (!target.closest('.manage-area') || target.classList.contains('manage-area')) {
+            if (target.closest('.member-head')) {
                 const body = row.querySelector('.member-body');
                 const arrow = row.querySelector('.toggle-arrow');
                 body.classList.toggle('hidden');
