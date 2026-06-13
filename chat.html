@@ -281,9 +281,7 @@
           return;
         }
         appState.isOffline = false;
-        const hasCache = appState.messages.size > 0;
-        updateAndRenderUI(!hasCache);
-        scrollToBottomAfterImages(elements.messagesBox, false);
+        updateAndRenderUI(true);
         attachRealtimeListeners();
         setupEventListeners();
         setupPresence(appState.currentUser.uid);
@@ -291,9 +289,7 @@
 
       } catch (error) {
         appState.isOffline = true;
-        const hasCache = appState.messages.size > 0;
-        updateAndRenderUI(!hasCache);
-        scrollToBottomAfterImages(elements.messagesBox, false);
+        updateAndRenderUI(true);
         window.addEventListener('online', () => {
           location.reload();
         });
@@ -654,6 +650,8 @@
       const msgQuery = query(ref(db, 'messages'), orderByChild('time'), limitToLast(30));
       const initialSnap = await get(msgQuery);
 
+      appState.messages.clear();
+
       if (initialSnap.exists()) {
         initialSnap.forEach(snap => {
           const msg = snap.val();
@@ -671,6 +669,8 @@
         appState.oldestMessageTime = minTime;
         appState.hasMoreOldMessages = initialSnap.size === 30;
       } else {
+        appState.latestMessageTime = 0;
+        appState.oldestMessageTime = 0;
         appState.hasMoreOldMessages = false;
       }
     }
